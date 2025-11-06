@@ -1,8 +1,6 @@
 # %%
-
 import streamlit as st
 from dashboard_core.utils import MESES_DIC, BIMESTRE_DIC, titulo_centralizado
-from dashboard_core.config import municipio_de_interesse
 
 
 # ==============================================================================
@@ -29,6 +27,7 @@ def show_page_home(
     df_saude_mensal,
     df_populacao_densidade,
     df_populacao_sexo_idade,
+    municipio_de_interesse,
 ):
     """
     Renderiza a página inicial do dashboard com instruções, informações e datas de atualização.
