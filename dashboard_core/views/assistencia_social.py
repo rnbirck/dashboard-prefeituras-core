@@ -12,10 +12,20 @@ from dashboard_core.utils import (
     calcular_yoy,
 )
 
-from dashboard_core.config import (
-    municipio_de_interesse,
-    CORES_MUNICIPIOS,
-)
+municipio_de_interesse = None
+CORES_MUNICIPIOS = {}
+
+
+def set_assistencia_social_config(municipio, cores_municipios):
+    """
+    Configura valores específicos do município que antes eram importados
+    do dashboard_core.config. Deve ser chamado pelo app.py antes de
+    renderizar a página de assistencia_social.
+    """
+    global municipio_de_interesse, CORES_MUNICIPIOS
+    municipio_de_interesse = municipio
+    CORES_MUNICIPIOS = cores_municipios or {}
+
 
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE ASSISTENCIA SOCIAL

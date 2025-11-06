@@ -1,13 +1,24 @@
 import pandas as pd
 import streamlit as st
 
-from dashboard_core.config import CORES_MUNICIPIOS
 from dashboard_core.utils import (
     MESES_DIC,
     criar_grafico_barras,
     checar_ult_ano_completo,
     titulo_centralizado,
 )
+
+CORES_MUNICIPIOS = {}
+
+
+def set_saude_config(cores_municipios):
+    """
+    Configura valores específicos do município que antes eram importados
+    do dashboard_core.config. Deve ser chamado pelo app.py antes de
+    renderizar a página de saude.
+    """
+    global CORES_MUNICIPIOS
+    CORES_MUNICIPIOS = cores_municipios or {}
 
 
 def preparar_dados_graficos_saude_mensal(

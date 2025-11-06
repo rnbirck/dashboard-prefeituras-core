@@ -2,14 +2,23 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from dashboard_core.config import (
-    CORES_MUNICIPIOS,
-)
-
 # ==============================================================================
 # IMPORTAÇÕES DE FUNÇÕES E DADOS
 # ==============================================================================
 from dashboard_core.utils import criar_grafico_barras, titulo_centralizado, BIMESTRE_MAP
+
+
+CORES_MUNICIPIOS = {}
+
+
+def set_financas_config(cores_municipios):
+    """
+    Configura valores específicos do município que antes eram importados
+    do dashboard_core.config. Deve ser chamado pelo app.py antes de
+    renderizar a página de financas.
+    """
+    global CORES_MUNICIPIOS
+    CORES_MUNICIPIOS = cores_municipios or {}
 
 
 # ==============================================================================

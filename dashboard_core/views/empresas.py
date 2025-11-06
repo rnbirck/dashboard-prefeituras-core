@@ -10,11 +10,26 @@ from dashboard_core.utils import (
     preparar_dados_graficos_anuais,
 )
 
-from dashboard_core.config import (
-    municipio_de_interesse,
-    CORES_MUNICIPIOS,
-    ordem_tamanho_estabelecimentos,
-)
+municipio_de_interesse = None
+CORES_MUNICIPIOS = {}
+ordem_tamanho_estabelecimentos = []
+
+
+def set_empresas_config(municipio, cores_municipios, ordem):
+    """
+    Injeta a configuração específica do município para as views de empresas.
+    Chamar no app.py antes de renderizar a página de empresas.
+
+    Parâmetros:
+      - municipio: str -> nome do município de interesse
+      - cores_municipios: dict -> mapa de cores por município
+      - kwargs: dicionário para configurações extras (opcional)
+    """
+    global municipio_de_interesse, CORES_MUNICIPIOS, ordem_tamanho_estabelecimentos
+    municipio_de_interesse = municipio
+    CORES_MUNICIPIOS = cores_municipios or {}
+    ordem_tamanho_estabelecimentos = ordem or []
+
 
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE EMPRESAS ATIVAS

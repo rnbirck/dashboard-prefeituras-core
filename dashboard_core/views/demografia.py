@@ -1,11 +1,24 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-from dashboard_core.config import CORES_MUNICIPIOS, municipio_de_interesse
 from dashboard_core.utils import (
     criar_grafico_barras,
     titulo_centralizado,
 )
+
+municipio_de_interesse = None
+CORES_MUNICIPIOS = {}
+
+
+def set_demografia_config(municipio, cores_municipios):
+    """
+    Configura valores específicos do município que antes eram importados
+    do dashboard_core.config. Deve ser chamado pelo app.py antes de
+    renderizar a página de demografia.
+    """
+    global municipio_de_interesse, CORES_MUNICIPIOS
+    municipio_de_interesse = municipio
+    CORES_MUNICIPIOS = cores_municipios or {}
 
 
 @st.cache_data

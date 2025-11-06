@@ -15,11 +15,22 @@ from dashboard_core.utils import (
     titulo_centralizado,
 )
 
-from dashboard_core.config import (
-    municipio_de_interesse,
-    anos_de_interesse,
-    CORES_MUNICIPIOS,
-)
+municipio_de_interesse = None
+CORES_MUNICIPIOS = {}
+anos_de_interesse = []
+
+
+def set_comercio_exterior_config(municipio, cores_municipios, anos_interesse):
+    """
+    Configura valores específicos do município que antes eram importados
+    do dashboard_core.config. Deve ser chamado pelo app.py antes de
+    renderizar a página de comercio_exterior.
+    """
+    global municipio_de_interesse, CORES_MUNICIPIOS, anos_de_interesse
+    municipio_de_interesse = municipio
+    CORES_MUNICIPIOS = cores_municipios or {}
+    anos_de_interesse = anos_interesse or []
+
 
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE COMÉRCIO EXTERIOR

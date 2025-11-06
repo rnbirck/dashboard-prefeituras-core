@@ -14,11 +14,22 @@ from dashboard_core.utils import (
     preparar_dados_graficos_anuais,
 )
 
-from dashboard_core.config import (
-    municipio_de_interesse,
-    CORES_MUNICIPIOS,
-    ordem_instrucao,
-)
+municipio_de_interesse = None
+CORES_MUNICIPIOS = {}
+ordem_instrucao = []
+
+
+def set_emprego_config(municipio, cores_municipios, ordem):
+    """
+    Configura valores específicos do município que antes eram importados
+    do dashboard_core.config. Deve ser chamado pelo app.py antes de
+    renderizar a página de emprego.
+    """
+    global municipio_de_interesse, CORES_MUNICIPIOS, ordem_instrucao
+    municipio_de_interesse = municipio
+    CORES_MUNICIPIOS = cores_municipios or {}
+    ordem_instrucao = ordem or []
+
 
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE EMPREGO

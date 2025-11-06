@@ -1,11 +1,22 @@
 import pandas as pd
 import streamlit as st
 
-from dashboard_core.config import CORES_MUNICIPIOS
 from dashboard_core.utils import (
     criar_grafico_barras,
     titulo_centralizado,
 )
+
+CORES_MUNICIPIOS = {}
+
+
+def set_educacao_config(cores_municipios):
+    """
+    Configura valores específicos do município que antes eram importados
+    do dashboard_core.config. Deve ser chamado pelo app.py antes de
+    renderizar a página de educacao.
+    """
+    global CORES_MUNICIPIOS
+    CORES_MUNICIPIOS = cores_municipios or {}
 
 
 @st.cache_data

@@ -12,9 +12,18 @@ from dashboard_core.utils import (
     titulo_centralizado,
 )
 
-from dashboard_core.config import (
-    CORES_MUNICIPIOS,
-)
+CORES_MUNICIPIOS = {}
+
+
+def set_seguranca_config(cores_municipios):
+    """
+    Configura valores específicos do município que antes eram importados
+    do dashboard_core.config. Deve ser chamado pelo app.py antes de
+    renderizar a página de seguranca.
+    """
+    global CORES_MUNICIPIOS
+    CORES_MUNICIPIOS = cores_municipios or {}
+
 
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE SEGURANÇA
