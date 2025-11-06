@@ -1,3 +1,4 @@
+MANIFEST.in
 setup.py
 dashboard_core/__init__.py
 dashboard_core/data_loader.py
@@ -9,6 +10,7 @@ dashboard_core.egg-info/SOURCES.txt
 dashboard_core.egg-info/dependency_links.txt
 dashboard_core.egg-info/requires.txt
 dashboard_core.egg-info/top_level.txt
+dashboard_core/assets/style.css
 dashboard_core/views/__init__.py
 dashboard_core/views/assistencia_social.py
 dashboard_core/views/comercio_exterior.py

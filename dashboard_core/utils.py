@@ -1,3 +1,5 @@
+from importlib import resources
+from pathlib import Path
 import plotly.express as px
 import streamlit as st
 import pandas as pd
@@ -81,12 +83,34 @@ def manter_posicao_scroll():
 
 
 # -- FUNCOES DE VISUALIZACAO ---
-def carregar_css(caminho_arquivo):
+def carregar_css(caminho_arquivo: str = "assets/style.css"):
     """
-    Lê um arquivo CSS e o injeta na aplicação Streamlit.
+    Carrega um arquivo CSS.
+    - Primeiro tenta encontrar dentro do pacote `dashboard_core` (via importlib.resources)
+    - Se não encontrar, tenta o caminho local (útil para desenvolvimento).
     """
-    with open(caminho_arquivo, encoding="utf-8") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    css_text = None
+
+    # 1) tenta dentro do pacote dashboard_core
+    try:
+        pkg_files = resources.files("dashboard_core")
+        css_res = pkg_files.joinpath(caminho_arquivo)
+        if css_res.exists():
+            css_text = css_res.read_text(encoding="utf-8")
+    except Exception:
+        css_text = None
+
+    # 2) fallback: tenta caminho local relativo (ex: ./assets/style.css)
+    if not css_text:
+        local_path = Path(caminho_arquivo)
+        if local_path.exists():
+            css_text = local_path.read_text(encoding="utf-8")
+
+    # 3) aplica o CSS ou mostra aviso discreto
+    if css_text:
+        st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
+    else:
+        st.warning(f"⚠️ Arquivo CSS não encontrado: {caminho_arquivo}")
 
 
 def titulo_centralizado(texto: str, level: int, cor: str = None):
