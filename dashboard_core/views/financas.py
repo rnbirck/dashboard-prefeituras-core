@@ -293,7 +293,6 @@ def display_indicadores_financeiros(
         titulo_centralizado(
             "Download do relatório metodológico que detalha a construção dos indicadores fiscais dos municípios",
             6,
-            cor="yellow",
         )
         if pdf_data:
             st.write("")
