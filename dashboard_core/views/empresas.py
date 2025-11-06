@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-from src.utils import (
+from dashboard_core.utils import (
     MESES_DIC,
     titulo_centralizado,
     calcular_yoy,
@@ -10,7 +10,7 @@ from src.utils import (
     preparar_dados_graficos_anuais,
 )
 
-from src.config import (
+from dashboard_core.config import (
     municipio_de_interesse,
     CORES_MUNICIPIOS,
     ordem_tamanho_estabelecimentos,

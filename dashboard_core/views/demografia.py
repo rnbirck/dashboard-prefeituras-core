@@ -1,8 +1,8 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-from src.config import CORES_MUNICIPIOS, municipio_de_interesse
-from src.utils import (
+from dashboard_core.config import CORES_MUNICIPIOS, municipio_de_interesse
+from dashboard_core.utils import (
     criar_grafico_barras,
     titulo_centralizado,
 )

@@ -2,14 +2,14 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src.config import (
+from dashboard_core.config import (
     CORES_MUNICIPIOS,
 )
 
 # ==============================================================================
 # IMPORTAÇÕES DE FUNÇÕES E DADOS
 # ==============================================================================
-from src.utils import criar_grafico_barras, titulo_centralizado, BIMESTRE_MAP
+from dashboard_core.utils import criar_grafico_barras, titulo_centralizado, BIMESTRE_MAP
 
 
 # ==============================================================================

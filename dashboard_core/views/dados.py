@@ -1,5 +1,5 @@
 import streamlit as st
-from src.utils import to_excel, titulo_centralizado
+from dashboard_core.utils import to_excel, titulo_centralizado
 
 
 def show_page_dados(

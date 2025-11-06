@@ -1,8 +1,8 @@
 # %%
 
 import streamlit as st
-from src.utils import MESES_DIC, BIMESTRE_DIC, titulo_centralizado
-from src.config import municipio_de_interesse
+from dashboard_core.utils import MESES_DIC, BIMESTRE_DIC, titulo_centralizado
+from dashboard_core.config import municipio_de_interesse
 
 
 # ==============================================================================

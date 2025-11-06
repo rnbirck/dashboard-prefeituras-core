@@ -5,14 +5,14 @@ import pandas as pd
 # IMPORTAÇÕES DE FUNÇÕES E DADOS
 # ==============================================================================
 
-from src.utils import (
+from dashboard_core.utils import (
     MESES_DIC,
     checar_ult_ano_completo,
     criar_grafico_barras,
     titulo_centralizado,
 )
 
-from src.config import (
+from dashboard_core.config import (
     CORES_MUNICIPIOS,
 )
 

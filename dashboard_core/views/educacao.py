@@ -1,8 +1,8 @@
 import pandas as pd
 import streamlit as st
 
-from src.config import CORES_MUNICIPIOS
-from src.utils import (
+from dashboard_core.config import CORES_MUNICIPIOS
+from dashboard_core.utils import (
     criar_grafico_barras,
     titulo_centralizado,
 )
