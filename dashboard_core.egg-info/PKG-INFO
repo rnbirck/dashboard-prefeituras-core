@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: dashboard_core
+Version: 0.1.0
+Summary: Código principal compartilhado para dashboards municipais.
+Author: Renan Birck
+Author-email: renanbirck@outlook.com
+Requires-Dist: python-dotenv==1.0.1
+Requires-Dist: supabase==2.7.2
+Requires-Dist: streamlit==1.49.1
+Requires-Dist: pandas==2.3.2
+Requires-Dist: numpy==2.3.2
+Requires-Dist: plotly==6.3.0
+Requires-Dist: openpyxl==3.1.5
+Requires-Dist: pyarrow==21.0.0
+Dynamic: author
+Dynamic: author-email
+Dynamic: requires-dist
+Dynamic: summary

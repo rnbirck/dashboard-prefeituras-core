@@ -7,8 +7,8 @@ setup(
     author="Renan Birck",
     author_email="renanbirck@outlook.com",
     packages=find_packages(),
+    include_package_data=True,
     install_requires=[
-        # Bibliotecas principais para o funcionamento do pacote
         "python-dotenv==1.0.1",
         "supabase==2.7.2",
         "streamlit==1.49.1",

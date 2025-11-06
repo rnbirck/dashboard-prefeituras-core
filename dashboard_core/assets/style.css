@@ -1,0 +1,82 @@
+
+/* Força os rótulos de widgets, abas e expanders para preto/escuro */
+[data-testid="stMetricLabel"] p,
+[data-testid="stTabs"] button p,
+[data-testid="stSelectbox"] label,
+[data-testid="stMultiSelect"] label,
+[data-testid="stExpander"] summary {
+    color: #111 !important;
+}
+
+/* Força os textos dos gráficos (eixos, legendas, títulos) para preto/escuro */
+.stPlotlyChart text {
+    fill: #111 !important; /* 'fill' é usado para texto SVG (Plotly) */
+}
+
+/* Esconde o botão 'Settings' que sobrou do toolbarMode = minimal */
+[data-testid="stToolbar"] button[title="Settings"] {
+    display: none !important;
+}
+
+/* ============================================================================== */
+/* ESTILOS DE LAYOUT (CONSOLIDADOS) */
+/* ============================================================================== */
+
+/* Centraliza o conteúdo (label e valor) de cada métrica */
+[data-testid="stMetric"] > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Aumenta o tamanho do valor da métrica */
+[data-testid="stMetricValue"] {
+    font-size: 1.3rem;
+}
+
+/* Aumenta o tamanho do label da métrica (já definido acima) */
+[data-testid="stMetricLabel"] p {
+    font-size: 1.1rem !important;
+}
+
+/* Aumenta o tamanho da fonte dos botões das abas (já definido acima) */
+[data-testid="stTabs"] button p {
+    font-size: 1.15rem !important;
+}
+
+/* --- Layout Geral (Consolidado) --- */
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 1.5rem;
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
+}
+
+/* Reduz o espaço vertical entre os elementos no corpo principal */
+[data-testid="stVerticalBlock"] > [style*="gap"] {
+    gap: 0.75rem; /* O padrão é 1rem */
+}
+
+/* --- Layout da Barra Lateral (Consolidado) --- */
+[data-testid="stSidebar"] > div:first-child {
+    padding-top: 2rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* Label acima dos widgets da barra lateral */
+[data-testid="stSidebar"] .st-emotion-cache-1y4p8pa {
+    font-size: 13px;
+}
+
+/* Alvo: O texto dentro da caixa do multiselect (placeholder e itens selecionados) */
+[data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
+    font-size: 13px;
+    padding: 2px 6px;
+}
+
+/* Alvo: O texto do placeholder "Choose an option" quando nada está selecionado */
+[data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"] > div {
+    font-size: 14px;
+}
+
