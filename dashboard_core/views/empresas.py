@@ -418,6 +418,7 @@ def show_page_empresas_ativas(
     df_estabelecimentos_tamanho,
 ):
     titulo_centralizado("Dashboard de Empresas Ativas", 1)
+
     display_cnpj_kpi_cards(
         df_cnpj=df_cnpj, df_mei=df_mei, municipio_de_interesse=municipio_de_interesse
     )
