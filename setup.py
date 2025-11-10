@@ -17,5 +17,6 @@ setup(
         "plotly==6.3.0",
         "openpyxl==3.1.5",
         "pyarrow==21.0.0",
+        "matplotlib",
     ],
 )
