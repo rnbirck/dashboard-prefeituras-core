@@ -363,13 +363,13 @@ def criar_grafico_linhas(
 
 
 @st.cache_data
-def criar_tabela_formatada(df, index_col, ult_ano, ult_mes):
+def criar_tabela_formatada(df, index_col, ult_ano, ult_mes, coluna_agregacao):
     """Cria uma tabela formatada para exibição no Streamlit."""
     df_filtrado = df[df["mes"] <= ult_mes]
     df_pivot = df_filtrado.pivot_table(
         index=index_col,
         columns="ano",
-        values="saldo_movimentacao",
+        values=coluna_agregacao,
         aggfunc="sum",
         fill_value=0,
     ).sort_values(by=ult_ano, ascending=False)
@@ -385,13 +385,13 @@ def criar_tabela_formatada(df, index_col, ult_ano, ult_mes):
 
 
 @st.cache_data
-def criar_tabela_formatada_mes(df, index_col, ult_ano, ult_mes):
+def criar_tabela_formatada_mes(df, index_col, ult_ano, ult_mes, coluna_agregacao):
     """Cria uma tabela formatada para exibição no Streamlit."""
     df_filtrado = df[df["mes"] == ult_mes]
     df_pivot = df_filtrado.pivot_table(
         index=index_col,
         columns="ano",
-        values="saldo_movimentacao",
+        values=coluna_agregacao,
         aggfunc="sum",
         fill_value=0,
     ).sort_values(by=ult_ano, ascending=False)
@@ -405,14 +405,33 @@ def criar_tabela_formatada_mes(df, index_col, ult_ano, ult_mes):
 
 
 @st.cache_data
-def criar_tabela_formatada_ano(df, index_col):
+def criar_tabela_formatada_ano(df, index_col, coluna_agregacao):
     """Cria uma tabela formatada para exibição no Streamlit."""
     ult_ano = checar_ult_ano_completo(df)
     df_filtrado = df[df["ano"] <= ult_ano]
     df_pivot = df_filtrado.pivot_table(
         index=index_col,
         columns="ano",
-        values="saldo_movimentacao",
+        values=coluna_agregacao,
+        aggfunc="sum",
+        fill_value=0,
+    ).sort_values(by=ult_ano, ascending=False)
+
+    df_pivot.index.name = index_col.replace("_", " ").title()
+
+    return df_pivot
+
+
+@st.cache_data
+def criar_tabela_formatada_ano_estoque(df, index_col, coluna_agregacao):
+    """Cria uma tabela formatada para exibição no Streamlit."""
+    ult_ano = checar_ult_ano_completo(df)
+    df_filtrado = df[df["ano"] <= ult_ano]
+    df_filtrado = df_filtrado.query("mes == 12")
+    df_pivot = df_filtrado.pivot_table(
+        index=index_col,
+        columns="ano",
+        values=coluna_agregacao,
         aggfunc="sum",
         fill_value=0,
     ).sort_values(by=ult_ano, ascending=False)

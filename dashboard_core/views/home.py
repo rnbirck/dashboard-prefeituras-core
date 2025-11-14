@@ -13,6 +13,7 @@ def go_to_page(page_name):
 
 def show_page_home(
     df_emprego,
+    df_estoque,
     df_comex,
     df_seguranca,
     df_assistencia_cad,
@@ -185,12 +186,11 @@ def show_page_home(
         st.markdown(
             f"""
             #### 💼 Emprego
-            Analisa o mercado de trabalho formal a partir de duas fontes principais: os dados mensais do **CAGED** (saldo de admissões/demissões) e as estatísticas anuais da **RAIS** (vínculos, remuneração e estabelecimentos).
-            
-            *Frequência: **Mensal (CAGED)** e **Anual (RAIS)***
-            
-            *Últimos dados: **CAGED:** **{data_emprego}** | **RAIS:** **{data_rais}***
-            """
+            Analisa o mercado de trabalho formal em três seções: **Saldo (CAGED)** (admissões/demissões mensais), **Estoque Estimado (CAGED+RAIS)** (estoque mensal) e **Vínculos/Renda (RAIS)** (dados anuais).
+                        
+            *Frequência: **Mensal (Saldo/Estoque)** e **Anual (Vínculos)***
+                        
+            *Últimos dados: **Mensal:** **{data_emprego}** | **Anual (RAIS):** **{data_rais}*** """
         )
         st.button(
             "Explorar Emprego ➔",

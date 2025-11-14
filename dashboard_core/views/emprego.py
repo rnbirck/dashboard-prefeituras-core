@@ -8,10 +8,12 @@ from dashboard_core.utils import (
     criar_tabela_formatada,
     criar_tabela_formatada_mes,
     criar_tabela_formatada_ano,
+    criar_tabela_formatada_ano_estoque,
     titulo_centralizado,
     formatador_pt_br,
     criar_formatador_final,
     preparar_dados_graficos_anuais,
+    calcular_yoy,
 )
 
 municipio_de_interesse = None
@@ -44,7 +46,6 @@ def display_emprego_kpi_cards(df, municipio_interesse):
     with st.container(border=False):
         filtro_municipio = df["municipio"] == municipio_interesse
         df_municipio = df[filtro_municipio]
-        ano_completo = checar_ult_ano_completo(df_municipio)
 
         ult_ano = df_municipio["ano"].max()
         ult_mes = df_municipio[df_municipio["ano"] == ult_ano]["mes"].max()
@@ -57,11 +58,7 @@ def display_emprego_kpi_cards(df, municipio_interesse):
             (df_municipio["ano"] == ult_ano) & (df_municipio["mes"] <= ult_mes)
         ]["saldo_movimentacao"].sum()
 
-        saldo_ano_completo = df_municipio[df_municipio["ano"] == ano_completo][
-            "saldo_movimentacao"
-        ].sum()
-
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         col1.metric(
             label=f"{MESES_DIC[ult_mes]} de {ult_ano}",
             value=f"{saldo_ult_mes:,.0f}".replace(",", "."),
@@ -74,10 +71,38 @@ def display_emprego_kpi_cards(df, municipio_interesse):
             delta=None,
             border=True,
         )
-        col3.metric(
-            label=f"{ano_completo}",
-            value=f"{saldo_ano_completo:,.0f}".replace(",", "."),
-            delta=None,
+
+
+def display_estoque_kpi_cards(df, municipio_interesse):
+    """Exibe os cards de KPI de Estoque de Emprego para um município específico."""
+
+    titulo_centralizado(f"Estoque de Emprego em {municipio_interesse}", 3)
+
+    with st.container(border=False):
+        filtro_municipio = df["municipio"] == municipio_interesse
+        df_municipio = df[filtro_municipio]
+
+        ult_ano = df_municipio["ano"].max()
+        ult_mes = df_municipio[df_municipio["ano"] == ult_ano]["mes"].max()
+
+        estoque_ult_mes = df_municipio[
+            (df_municipio["ano"] == ult_ano) & (df_municipio["mes"] == ult_mes)
+        ]["estoque_mensal"].sum()
+
+        estoque_yoy = calcular_yoy(
+            df=df,
+            municipio=municipio_de_interesse,
+            ultimo_ano=ult_ano,
+            ultimo_mes=ult_mes,
+            coluna="estoque_mensal",
+            round=1,
+        )
+
+        st.metric(
+            label=f"{MESES_DIC[ult_mes]} de {ult_ano}",
+            value=f"{estoque_ult_mes:,.0f}".replace(",", "."),
+            delta=f"{estoque_yoy}%".replace(".", ","),
+            help="Taxa de Variação percentual em relação ao mesmo mês do ano anterior",
             border=True,
         )
 
@@ -150,6 +175,66 @@ def preparar_dados_graficos_emprego(df_filtrado):
 
 
 @st.cache_data
+def preparar_dados_graficos_estoque(df_filtrado):
+    """
+    Recebe um DataFrame filtrado e retorna todos os DataFrames pivotados e prontos
+    para os gráficos do expander de estoque de emprego. Esta função é cacheada para performance.
+    """
+    if df_filtrado.empty:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), None, None
+
+    # Histórico Mensal
+    df_hist = (
+        df_filtrado.assign(
+            date=lambda x: pd.to_datetime(
+                x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
+            )
+        )
+        .pivot_table(
+            index="date",
+            columns="municipio",
+            values="estoque_mensal",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .sort_index()
+    )
+
+    ult_ano = df_filtrado["ano"].max()
+    ult_mes = df_filtrado[df_filtrado["ano"] == ult_ano]["mes"].max()
+
+    # Mes
+    df_mes = (
+        df_filtrado[df_filtrado["mes"] == ult_mes]
+        .pivot_table(
+            index="ano",
+            columns="municipio",
+            values="estoque_mensal",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .sort_index()
+    )
+    df_mes.index = MESES_DIC[ult_mes][:3] + "/" + df_mes.index.astype(str).str.slice(-2)
+
+    # Anual
+    ano_completo = checar_ult_ano_completo(df_filtrado)
+    df_anual = (
+        df_filtrado[(df_filtrado["ano"] <= ano_completo) & (df_filtrado["mes"] == 12)]
+        .pivot_table(
+            index="ano",
+            columns="municipio",
+            values="estoque_mensal",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .sort_index(ascending=False)
+    )
+
+    return df_hist, df_mes, df_anual, ult_ano, ult_mes
+
+
+@st.cache_data
 def preparar_dados_categoria_emprego(df_categoria, index_col, sort_order=None):
     """
     Prepara os DataFrames de Mês, Acumulado e Ano para uma categoria de emprego.
@@ -170,13 +255,21 @@ def preparar_dados_categoria_emprego(df_categoria, index_col, sort_order=None):
 
     # Delega a criação das tabelas para as funções já cacheadas de utils
     df_mes = criar_tabela_formatada_mes(
-        df=df_categoria, index_col=index_col, ult_ano=ult_ano, ult_mes=ult_mes
+        df=df_categoria,
+        index_col=index_col,
+        ult_ano=ult_ano,
+        ult_mes=ult_mes,
+        coluna_agregacao="saldo_movimentacao",
     ).sort_index()
     df_acum = criar_tabela_formatada(
-        df=df_categoria, index_col=index_col, ult_ano=ult_ano, ult_mes=ult_mes
+        df=df_categoria,
+        index_col=index_col,
+        ult_ano=ult_ano,
+        ult_mes=ult_mes,
+        coluna_agregacao="saldo_movimentacao",
     ).sort_index()
     df_anual = criar_tabela_formatada_ano(
-        df=df_categoria, index_col=index_col
+        df=df_categoria, index_col=index_col, coluna_agregacao="saldo_movimentacao"
     ).sort_index()
 
     return df_mes, df_acum, df_anual
@@ -282,16 +375,51 @@ def preparar_dados_graficos_cnae(df_cnae, index_col):
         ult_mes = df_cnae[df_cnae["ano"] == ult_ano]["mes"].max()
 
         df_mes = criar_tabela_formatada_mes(
-            df=df_cnae, index_col=index_col, ult_ano=ult_ano, ult_mes=ult_mes
+            df=df_cnae,
+            index_col=index_col,
+            ult_ano=ult_ano,
+            ult_mes=ult_mes,
+            coluna_agregacao="saldo_movimentacao",
         )
 
         df_acum = criar_tabela_formatada(
-            df=df_cnae, index_col=index_col, ult_ano=ult_ano, ult_mes=ult_mes
+            df=df_cnae,
+            index_col=index_col,
+            ult_ano=ult_ano,
+            ult_mes=ult_mes,
+            coluna_agregacao="saldo_movimentacao",
         )
 
-        df_anual = criar_tabela_formatada_ano(df=df_cnae, index_col=index_col)
+        df_anual = criar_tabela_formatada_ano(
+            df=df_cnae, index_col=index_col, coluna_agregacao="saldo_movimentacao"
+        )
 
     return df_mes, df_acum, df_anual
+
+
+def preparar_dados_graficos_estoque_cnae(df_cnae, index_col):
+    """
+    Prepara os DataFrames para as visualizações de Mês, Acumulado e Ano para dados de CNAE.
+    """
+    df_mes, df_anual = pd.DataFrame(), pd.DataFrame()
+
+    if not df_cnae.empty:
+        ult_ano = df_cnae["ano"].max()
+        ult_mes = df_cnae[df_cnae["ano"] == ult_ano]["mes"].max()
+
+        df_mes = criar_tabela_formatada_mes(
+            df=df_cnae,
+            index_col=index_col,
+            ult_ano=ult_ano,
+            ult_mes=ult_mes,
+            coluna_agregacao="estoque_mensal",
+        )
+
+        df_anual = criar_tabela_formatada_ano_estoque(
+            df=df_cnae, index_col=index_col, coluna_agregacao="estoque_mensal"
+        )
+
+    return df_mes, df_anual
 
 
 def display_emprego_municipios_expander(
@@ -373,6 +501,79 @@ def display_emprego_municipios_expander(
             st.plotly_chart(fig_anual, width="stretch")
 
 
+def display_estoque_municipios_expander(
+    df,
+):
+    """Exibe o expander com análise de estoque de emprego para múltiplos municípios."""
+    with st.expander("Estoque de Emprego Estimado por Município", expanded=False):
+        df_hist, df_mes, df_anual, ult_ano, ult_mes = preparar_dados_graficos_estoque(
+            df
+        )
+        anos_disponiveis = sorted(df["ano"].unique().tolist(), reverse=True)
+
+        tab_hist, tab_mes, tab_anual = st.tabs(
+            ["Histórico Mensal", "Mês", "Anual"],
+        )
+
+        with tab_hist:
+            ANO_SELECIONADO = st.selectbox(
+                "Selecione o ano para o gráfico:",
+                options=anos_disponiveis,
+                index=0,
+                key="hist_ano_estoque",
+            )
+
+            df_hist = df_hist[df_hist.index.year == ANO_SELECIONADO]
+            if not df_hist.empty:
+                df_hist.index = [
+                    f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
+                    for date in df_hist.index
+                ]
+
+            titulo_centralizado(f"Estoque de Emprego Mensal em {ANO_SELECIONADO}", 5)
+
+            fig_hist = criar_grafico_barras(
+                df=df_hist,
+                titulo="",
+                label_y="Estoque de Emprego",
+                barmode="group",
+                height=400,
+                data_label_format=",.0f",
+                hover_label_format=",.0f",
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig_hist, width="stretch")
+
+        with tab_mes:
+            titulo_centralizado(f"Estoque de Emprego em {MESES_DIC[ult_mes]}", 5)
+            fig_acum = criar_grafico_barras(
+                df=df_mes,
+                titulo="",
+                label_y="Estoque de Emprego",
+                barmode="group",
+                height=400,
+                data_label_format=",.0f",
+                hover_label_format=",.0f",
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig_acum, width="stretch")
+
+        with tab_anual:
+            titulo_centralizado("Estoque de Emprego Anual", 5)
+
+            fig_anual = criar_grafico_barras(
+                df=df_anual,
+                titulo="",
+                label_y="Estoque de Emprego",
+                barmode="group",
+                height=400,
+                data_label_format=",.0f",
+                hover_label_format=",.0f",
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig_anual, width="stretch")
+
+
 def display_emprego_cnae_expander(df_cnae_foco):
     """Exibe o expander com análise de saldo de emprego por Setor e CNAE"""
     with st.expander(
@@ -430,6 +631,75 @@ def display_emprego_cnae_expander(df_cnae_foco):
                 df_selecionado = df_selecionado.style.format(
                     lambda x: f"{x:,.0f}".replace(",", ".")
                 ).background_gradient(cmap="coolwarm_r", axis=0)
+                st.dataframe(df_selecionado)
+
+        with tab_setor:
+            render_cnae_content("grupo_ibge", show_graph=True, titulo_categoria="Setor")
+        with tab_grupo:
+            render_cnae_content(
+                "grupo", show_graph=False, titulo_categoria="CNAE - Grupo"
+            )
+        with tab_subclasse:
+            render_cnae_content(
+                "subclasse", show_graph=False, titulo_categoria="CNAE - Subclasse"
+            )
+
+
+def display_estoque_cnae_expander(df_cnae_foco):
+    """Exibe o expander com análise de estoque de emprego por Setor e CNAE"""
+    with st.expander(
+        f"Estoque de Emprego Estimado por Setor Econômico em {municipio_de_interesse}",
+        expanded=False,
+    ):
+        tab_setor, tab_grupo, tab_subclasse = st.tabs(
+            ["Setor", "CNAE - Grupo", "CNAE - Subclasse"]
+        )
+
+        def render_cnae_content(index_col, titulo_categoria, show_graph=True):
+            """Função interna para renderizar o conteúdo de cada aba de CNAE."""
+            df_mes, df_anual = preparar_dados_graficos_estoque_cnae(
+                df_cnae_foco, index_col
+            )
+
+            ult_ano = int(df_cnae_foco["ano"].max())
+            ult_mes = int(df_cnae_foco[df_cnae_foco["ano"] == ult_ano]["mes"].max())
+
+            view_mode = st.radio(
+                "Selecione a Análise:",
+                options=["Mês", "Anual"],
+                horizontal=True,
+                label_visibility="collapsed",
+                key=f"view_mode_cnae_estoque_{index_col}",
+            )
+
+            df_map = {
+                "Mês": df_mes,
+                "Anual": df_anual,
+            }
+            df_selecionado = df_map[view_mode]
+
+            if view_mode == "Mês":
+                titulo_centralizado(
+                    f"Estoque em {MESES_DIC[ult_mes]} por {titulo_categoria}", 5
+                )
+
+            elif view_mode == "Anual":
+                titulo_centralizado(f"Estoque Anual por {titulo_categoria}", 5)
+
+            # Lógica para exibir gráfico ou tabela
+            if show_graph:
+                fig = criar_grafico_barras(
+                    df=df_selecionado.sort_index().T,
+                    titulo="",
+                    label_y="Estoque de Emprego",
+                    data_label_format=",.0f",
+                    hover_label_format=",.0f",
+                )
+                st.plotly_chart(fig, width="stretch")
+            else:
+                df_selecionado = df_selecionado.style.format(
+                    lambda x: f"{x:,.0f}".replace(",", ".")
+                ).background_gradient(cmap="GnBu", axis=0)
                 st.dataframe(df_selecionado)
 
         with tab_setor:
@@ -797,6 +1067,8 @@ def show_page_emprego(
     df_caged_grau_instrucao,
     df_caged_sexo,
     municipio_de_interesse,
+    df_estoque,
+    df_estoque_cnae,
     df_vinculos,
     df_vinculos_cnae,
     df_vinculos_faixa_etaria,
@@ -835,6 +1107,18 @@ def show_page_emprego(
 
         if not df_caged_cnae.empty:
             display_emprego_cnae_expander(df_caged_cnae)
+    st.markdown(
+        "###### Estimativa de Estoque de Emprego (Dados combinados da RAIS e CAGED) - Atualização Mensal"
+    )
+    with st.expander("Estoque de Emprego Estimado", expanded=True):
+        display_estoque_kpi_cards(df_estoque, municipio_de_interesse)
+        titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
+
+        display_estoque_municipios_expander(
+            df_estoque,
+        )
+
+        display_estoque_cnae_expander(df_estoque_cnae)
     st.markdown("###### Dados disponibilizados pela RAIS - Atualização Anual")
     display_vinculos(
         df_mun=df_vinculos,

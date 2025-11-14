@@ -10,6 +10,8 @@ def show_page_dados(
     df_caged_raca_cor,
     df_caged_grau_instrucao,
     df_caged_sexo,
+    df_estoque,
+    df_estoque_cnae,
     df_vinculos,
     df_vinculos_cnae,
     df_vinculos_faixa_etaria,
@@ -119,6 +121,29 @@ def show_page_dados(
                 label=f"📥 Saldo por Grau de Instrução em {municipio_de_interesse}",
                 data=to_excel(df_caged_grau_instrucao),
                 file_name="caged_saldo_grau_instrucao.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
+        st.divider()
+        st.subheader("Dados de Estoque de Emprego (CAGED + RAIS)")
+        st.markdown(
+            "Estimativa mensal do estoque de empregos formais por município e categorias."
+        )
+        col_est_1, col_est_2 = st.columns(2)
+        with col_est_1:
+            st.download_button(
+                label="📥 Estoque por Município",
+                data=to_excel(df_estoque),
+                file_name="estoque_emprego_municipios.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        with col_est_2:
+            st.download_button(
+                label=f"📥 Estoque por CNAE em {municipio_de_interesse}",
+                data=to_excel(df_estoque_cnae),
+                file_name="estoque_emprego_cnae.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
@@ -440,6 +465,7 @@ def show_page_dados(
         st.markdown(
             "Dados mensais e anuais de mortalidade, nascimentos, atenção básica, vacinação, médicos e leitos por município."
         )
+        st.divider()
 
         # --- DADOS MENSAIS (equivalente ao CAGED) ---
         st.subheader("Dados Mensais")
