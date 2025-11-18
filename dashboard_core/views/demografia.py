@@ -21,6 +21,17 @@ def set_demografia_config(municipio, cores_municipios):
     CORES_MUNICIPIOS = cores_municipios or {}
 
 
+# --- FUNÇÕES DE CALLBACK ---
+def set_indicadores_demograficos_open():
+    """Define o estado do expander Indicadores Demográficos como True."""
+    st.session_state.demografia_indicadores_expander = True
+
+
+def set_piramide_etaria_open():
+    """Define o estado do expander Pirâmide Etária como True."""
+    st.session_state.demografia_piramide_expander = True
+
+
 @st.cache_data
 def preparar_dados_graficos_populacao_densidade(df_filtrado, coluna_selecionada):
     df_anual = df_filtrado.pivot_table(
@@ -107,6 +118,9 @@ def preparar_dados_grafico_piramide_etaria(
 
 
 def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
+    # Dentro das abas, os widgets de selectbox ou radio podem disparar o callback
+    # para garantir que o expander permaneça aberto.
+
     tab_populacao, tab_sexo, tab_densidade = st.tabs(
         ["População Estimada", "Sexo", "Densidade Demográfica"]
     )
@@ -127,7 +141,9 @@ def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
             hover_label_format=",.0f",
             color_map=CORES_MUNICIPIOS,
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(
+            fig, use_container_width=True
+        )  # Ajustado para usar use_container_width=True
 
     with tab_sexo:
         CORES_SEXO = {"Masculino": "#4C82F7", "Feminino": "#FF6BE1"}
@@ -140,6 +156,7 @@ def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
             "Selecione o ano para visualizar a proporção por sexo:",
             options=anos_disponiveis,
             key="selectbox_ano_sexo",
+            on_change=set_indicadores_demograficos_open,
         )
 
         titulo_centralizado(
@@ -178,7 +195,9 @@ def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
             hover_label_format=",.0f",
             color_map=CORES_MUNICIPIOS,
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(
+            fig, use_container_width=True
+        )  # Ajustado para usar use_container_width=True
 
 
 def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_interesse):
@@ -197,6 +216,7 @@ def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_inter
         "Selecione o ano para a pirâmide etária:",
         options=anos_disponiveis,
         key="selectbox_ano_piramide",
+        on_change=set_piramide_etaria_open,
     )
 
     df_plot = preparar_dados_grafico_piramide_etaria(
@@ -293,15 +313,27 @@ def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_inter
 
 
 def show_page_demografia(df_populacao_densidade, df_populacao_sexo_idade):
+    if "demografia_indicadores_expander" not in st.session_state:
+        st.session_state.demografia_indicadores_expander = False
+    if "demografia_piramide_expander" not in st.session_state:
+        st.session_state.demografia_piramide_expander = False
+
     titulo_centralizado("Dashboard de Demográfia", 1)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
-    with st.expander("Indicadores demográficos dos Municípios"):
+
+    with st.expander(
+        "Indicadores demográficos dos Municípios",
+        expanded=st.session_state.demografia_indicadores_expander,
+    ):
         display_populacao_densidade_expander(
             df_filtrado=df_populacao_densidade,
             df_filtrado_sexo=df_populacao_sexo_idade,
         )
 
-    with st.expander(f"Pirâmide Etária de {municipio_de_interesse}"):
+    with st.expander(
+        f"Pirâmide Etária de {municipio_de_interesse}",
+        expanded=st.session_state.demografia_piramide_expander,
+    ):
         display_populacao_piramide_etaria_expander(
             df_filtrado_sexo=df_populacao_sexo_idade,
             municipio_interesse=municipio_de_interesse,

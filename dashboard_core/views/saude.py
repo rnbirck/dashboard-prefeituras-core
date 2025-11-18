@@ -21,6 +21,52 @@ def set_saude_config(cores_municipios):
     CORES_MUNICIPIOS = cores_municipios or {}
 
 
+# --- FUNÇÕES DE CALLBACK ---
+
+
+def set_expander_open(key):
+    """Define o estado de um expander específico como True (aberto)."""
+    st.session_state[key] = True
+
+
+# Callbacks para Indicadores Mensais
+def obitos_callback():
+    set_expander_open("obitos_expander_state")
+
+
+def nascimentos_callback():
+    set_expander_open("nascimentos_expander_state")
+
+
+def gestantes_callback():
+    set_expander_open("gestantes_expander_state")
+
+
+def atencao_basica_mensal_callback():
+    set_expander_open("atencao_basica_mensal_expander_state")
+
+
+def acidente_trabalho_callback():
+    set_expander_open("acidente_trabalho_expander_state")
+
+
+# Callbacks para Indicadores Anuais
+def despesas_callback():
+    set_expander_open("despesas_expander_state")
+
+
+def vacinas_callback():
+    set_expander_open("vacinas_expander_state")
+
+
+def medicos_callback():
+    set_expander_open("medicos_expander_state")
+
+
+def leitos_callback():
+    set_expander_open("leitos_expander_state")
+
+
 def preparar_dados_graficos_saude_mensal(
     df_filtrado, coluna_selecionada, metodo_agg="sum"
 ):
@@ -95,14 +141,23 @@ def preparar_dados_graficos_saude_anual(df_filtrado, coluna_selecionada):
 
 
 def display_saude_expander(
-    df_filtrado, titulo_expander, dicionario_indicadores, key_prefix
+    df_filtrado,
+    titulo_expander,
+    dicionario_indicadores,
+    key_prefix,
+    expander_state_key,
+    callback_func,
 ):
     """Função genérica para exibir uma seção de indicadores de saúde."""
-    with st.expander(titulo_expander, expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
         indicador_selecionado = st.selectbox(
             "Selecione um indicador para visualizar:",
             options=list(dicionario_indicadores.keys()),
             key=f"{key_prefix}_selectbox",
+            on_change=callback_func,
         )
 
         coluna_selecionada, agg_method, label_y, data_format = dicionario_indicadores[
@@ -136,6 +191,7 @@ def display_saude_expander(
                     options=anos_disponiveis,
                     index=0,
                     key=f"{key_prefix}_hist_ano",
+                    on_change=callback_func,
                 )
                 titulo_centralizado(
                     f"{indicador_selecionado} - Histórico Mensal em {ANO_SELECIONADO}",
@@ -159,7 +215,7 @@ def display_saude_expander(
                     hover_label_format=hover_format,
                     color_map=CORES_MUNICIPIOS,
                 )
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
         if ult_mes:
             with tab_acum:
@@ -183,7 +239,7 @@ def display_saude_expander(
                     hover_label_format=hover_format,
                     color_map=CORES_MUNICIPIOS,
                 )
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
         with tab_anual:
             titulo_centralizado(f"{indicador_selecionado} - Análise Anual", 5)
@@ -197,17 +253,26 @@ def display_saude_expander(
                 hover_label_format=hover_format,
                 color_map=CORES_MUNICIPIOS,
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
 
 def display_saude_anual_expander(
-    df_filtrado, titulo_expander, dicionario_indicadores, key_prefix
+    df_filtrado,
+    titulo_expander,
+    dicionario_indicadores,
+    key_prefix,
+    expander_state_key,
+    callback_func,
 ):
-    with st.expander(titulo_expander, expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
         indicador_selecionado = st.selectbox(
             "Selecione um indicador para visualizar:",
             options=list(dicionario_indicadores.keys()),
             key=f"{key_prefix}_selectbox",
+            on_change=callback_func,
         )
 
         coluna_selecionada, label_y, data_format = dicionario_indicadores[
@@ -238,7 +303,7 @@ def display_saude_anual_expander(
             hover_label_format=hover_format,
             color_map=CORES_MUNICIPIOS,
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 
 # ==============================================================================
@@ -253,6 +318,26 @@ def show_page_saude(
     df_saude_leitos,
     df_saude_medicos,
 ):
+    # 1. Inicialização dos estados dos expanders
+    if "obitos_expander_state" not in st.session_state:
+        st.session_state.obitos_expander_state = False
+    if "nascimentos_expander_state" not in st.session_state:
+        st.session_state.nascimentos_expander_state = False
+    if "gestantes_expander_state" not in st.session_state:
+        st.session_state.gestantes_expander_state = False
+    if "atencao_basica_mensal_expander_state" not in st.session_state:
+        st.session_state.atencao_basica_mensal_expander_state = False
+    if "acidente_trabalho_expander_state" not in st.session_state:
+        st.session_state.acidente_trabalho_expander_state = False
+    if "despesas_expander_state" not in st.session_state:
+        st.session_state.despesas_expander_state = False
+    if "vacinas_expander_state" not in st.session_state:
+        st.session_state.vacinas_expander_state = False
+    if "medicos_expander_state" not in st.session_state:
+        st.session_state.medicos_expander_state = False
+    if "leitos_expander_state" not in st.session_state:
+        st.session_state.leitos_expander_state = False
+
     titulo_centralizado("Dashboard de Saúde", 1)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
 
@@ -427,66 +512,88 @@ def show_page_saude(
     }
 
     # --- CHAMADAS PARA OS EXPANDERS ---
-    with st.expander("Indicadores Mensais de Saúde", expanded=True):
-        st.markdown("###### Indicadores de Saúde com atualização mensal")
-        display_saude_expander(
-            df_filtrado=df_saude_mensal,
-            titulo_expander="Indicadores de Óbitos",
-            dicionario_indicadores=INDICADORES_OBITOS,
-            key_prefix="obitos",
-        )
 
-        display_saude_expander(
-            df_filtrado=df_saude_mensal,
-            titulo_expander="Indicadores de Nascimentos",
-            dicionario_indicadores=INDICADORES_NASCIMENTOS,
-            key_prefix="nascimentos",
-        )
+    st.markdown("###### Indicadores Mensais de Saúde")
 
-        display_saude_expander(
-            df_filtrado=df_saude_mensal,
-            titulo_expander="Indicadores de Gestantes",
-            dicionario_indicadores=INDICADORES_GESTANTES,
-            key_prefix="gestantes",
-        )
+    display_saude_expander(
+        df_filtrado=df_saude_mensal,
+        titulo_expander="Indicadores de Óbitos",
+        dicionario_indicadores=INDICADORES_OBITOS,
+        key_prefix="obitos",
+        expander_state_key="obitos_expander_state",
+        callback_func=obitos_callback,
+    )
 
-        display_saude_expander(
-            df_filtrado=df_saude_mensal,
-            titulo_expander="Atenção Básica",
-            dicionario_indicadores=INDICADORES_ATENCAO_BASICA_MENSAL,
-            key_prefix="atencao_basica_mensal",
-        )
+    display_saude_expander(
+        df_filtrado=df_saude_mensal,
+        titulo_expander="Indicadores de Nascimentos",
+        dicionario_indicadores=INDICADORES_NASCIMENTOS,
+        key_prefix="nascimentos",
+        expander_state_key="nascimentos_expander_state",
+        callback_func=nascimentos_callback,
+    )
 
-        display_saude_expander(
-            df_filtrado=df_saude_mensal,
-            titulo_expander="Acidentes e Doenças Relacionadas ao Trabalho",
-            dicionario_indicadores=INDICADORES_ACIDENTE_DE_TRABALHO,
-            key_prefix="acidente_trabalho",
-        )
+    display_saude_expander(
+        df_filtrado=df_saude_mensal,
+        titulo_expander="Indicadores de Gestantes",
+        dicionario_indicadores=INDICADORES_GESTANTES,
+        key_prefix="gestantes",
+        expander_state_key="gestantes_expander_state",
+        callback_func=gestantes_callback,
+    )
 
-    with st.expander("Indicadores Anuais de Saúde", expanded=True):
-        st.markdown("###### Indicadores de Saúde com atualização anual")
-        display_saude_anual_expander(
-            df_filtrado=df_saude_despesas,
-            titulo_expander="Despesas com Saúde",
-            dicionario_indicadores=INDICADORES_DESPESAS,
-            key_prefix="despesas",
-        )
-        display_saude_anual_expander(
-            df_filtrado=df_saude_vacinas,
-            titulo_expander="Imunização",
-            dicionario_indicadores=INDICADORES_VACINAS,
-            key_prefix="vacinas",
-        )
-        display_saude_anual_expander(
-            df_filtrado=df_saude_medicos,
-            titulo_expander="Médicos no SUS",
-            dicionario_indicadores=INDICADORES_MEDICOS,
-            key_prefix="medicos",
-        )
-        display_saude_anual_expander(
-            df_filtrado=df_saude_leitos,
-            titulo_expander="Leitos de Internação e Complementares no SUS",
-            dicionario_indicadores=INDICADORES_LEITOS,
-            key_prefix="leitos",
-        )
+    display_saude_expander(
+        df_filtrado=df_saude_mensal,
+        titulo_expander="Atenção Básica",
+        dicionario_indicadores=INDICADORES_ATENCAO_BASICA_MENSAL,
+        key_prefix="atencao_basica_mensal",
+        expander_state_key="atencao_basica_mensal_expander_state",
+        callback_func=atencao_basica_mensal_callback,
+    )
+
+    display_saude_expander(
+        df_filtrado=df_saude_mensal,
+        titulo_expander="Acidentes e Doenças Relacionadas ao Trabalho",
+        dicionario_indicadores=INDICADORES_ACIDENTE_DE_TRABALHO,
+        key_prefix="acidente_trabalho",
+        expander_state_key="acidente_trabalho_expander_state",
+        callback_func=acidente_trabalho_callback,
+    )
+
+    st.markdown("###### Indicadores Anuais de Saúde")
+
+    display_saude_anual_expander(
+        df_filtrado=df_saude_despesas,
+        titulo_expander="Despesas com Saúde",
+        dicionario_indicadores=INDICADORES_DESPESAS,
+        key_prefix="despesas",
+        expander_state_key="despesas_expander_state",
+        callback_func=despesas_callback,
+    )
+
+    display_saude_anual_expander(
+        df_filtrado=df_saude_vacinas,
+        titulo_expander="Imunização",
+        dicionario_indicadores=INDICADORES_VACINAS,
+        key_prefix="vacinas",
+        expander_state_key="vacinas_expander_state",
+        callback_func=vacinas_callback,
+    )
+
+    display_saude_anual_expander(
+        df_filtrado=df_saude_medicos,
+        titulo_expander="Médicos no SUS",
+        dicionario_indicadores=INDICADORES_MEDICOS,
+        key_prefix="medicos",
+        expander_state_key="medicos_expander_state",
+        callback_func=medicos_callback,
+    )
+
+    display_saude_anual_expander(
+        df_filtrado=df_saude_leitos,
+        titulo_expander="Leitos de Internação e Complementares no SUS",
+        dicionario_indicadores=INDICADORES_LEITOS,
+        key_prefix="leitos",
+        expander_state_key="leitos_expander_state",
+        callback_func=leitos_callback,
+    )

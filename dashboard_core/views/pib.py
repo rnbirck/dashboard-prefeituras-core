@@ -22,6 +22,25 @@ def set_pib_config(cores_municipios):
     CORES_MUNICIPIOS = cores_municipios or {}
 
 
+# --- FUNÇÕES DE CALLBACK ---
+
+
+def set_expander_open(key):
+    """Define o estado de um expander específico como True (aberto)."""
+    st.session_state[key] = True
+
+
+# Funções específicas para callbacks
+def pib_total_callback():
+    """Callback para manter o expander PIB Total aberto."""
+    set_expander_open("pib_total_expander_state")
+
+
+def pib_vab_callback():
+    """Callback para manter o expander VAB aberto."""
+    set_expander_open("pib_vab_expander_state")
+
+
 @st.cache_data
 def preparar_dados_graficos_pib(df_filtrado, coluna_agregacao, coluna_selecionada):
     """Prepara os dados para o gráfico de PIB, garantindo que todos os municípios e anos estejam presentes."""
@@ -64,19 +83,28 @@ def preparar_dados_graficos_pib(df_filtrado, coluna_agregacao, coluna_selecionad
 
 
 def display_pib_total_expander(
-    df_filtrado, titulo_expander, dicionario_indicadores, key_prefix
+    df_filtrado,
+    titulo_expander,
+    dicionario_indicadores,
+    key_prefix,
+    expander_state_key,
+    callback_func,
 ):
     """
     Expander modificado para incluir um st.radio para métricas
     (Valor vs Taxa de Crescimento) quando disponível.
     """
-    with st.expander(titulo_expander, expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False  # Inicializa o estado
+
+    with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
         col1, col2 = st.columns([0.6, 0.4])
         with col1:
             indicador_selecionado = st.selectbox(
                 "Selecione um indicador para visualizar:",
                 options=list(dicionario_indicadores.keys()),
                 key=f"{key_prefix}_selectbox",
+                on_change=callback_func,
             )
 
         # Pega o dicionário de métricas para o indicador selecionado
@@ -91,6 +119,7 @@ def display_pib_total_expander(
                     options=list(metricas_disponiveis.keys()),
                     key=f"{key_prefix}_metric_radio",
                     horizontal=True,
+                    on_change=callback_func,
                 )
 
         (coluna_selecionada, label_y, data_format, reversed_y, chart_type) = (
@@ -141,12 +170,22 @@ def display_pib_total_expander(
         st.plotly_chart(fig, use_container_width=True)
 
 
-def display_pib_vab_expander(df_filtrado, titulo_expander, vab_map, key_prefix):
+def display_pib_vab_expander(
+    df_filtrado,
+    titulo_expander,
+    vab_map,
+    key_prefix,
+    expander_state_key,
+    callback_func,
+):
     """
     Função modificada para incluir o gráfico de barras empilhadas (Estrutura VAB)
     como a primeira opção.
     """
-    with st.expander(titulo_expander, expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False  # Inicializa o estado
+
+    with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
         opcoes_visualizacao = ["Estrutura VAB por Setor"] + list(vab_map.keys())
 
         col1, col2 = st.columns([0.5, 0.5])
@@ -156,6 +195,7 @@ def display_pib_vab_expander(df_filtrado, titulo_expander, vab_map, key_prefix):
                 "Selecione a visualização:",
                 options=opcoes_visualizacao,
                 key=f"{key_prefix}_setor_selectbox",
+                on_change=callback_func,
             )
 
         # --- LÓGICA 1: GRÁFICO DE ESTRUTURA (STACKED BAR) ---
@@ -167,6 +207,7 @@ def display_pib_vab_expander(df_filtrado, titulo_expander, vab_map, key_prefix):
                     "Selecione o ano:",
                     anos_disponiveis,
                     key=f"{key_prefix}_ano_stacked",
+                    on_change=callback_func,
                 )
 
             titulo_centralizado(f"Estrutura do VAB por Setor ({ano_selecionado})", 5)
@@ -230,6 +271,7 @@ def display_pib_vab_expander(df_filtrado, titulo_expander, vab_map, key_prefix):
                     options=list(metricas_setor.keys()),
                     key=f"{key_prefix}_metrica_radio",
                     horizontal=True,
+                    on_change=callback_func,
                 )
 
             (coluna_selecionada, label_y, data_format, reversed_y, chart_type) = (
@@ -285,6 +327,11 @@ def display_pib_vab_expander(df_filtrado, titulo_expander, vab_map, key_prefix):
 
 
 def show_page_pib(df_pib):
+    if "pib_total_expander_state" not in st.session_state:
+        st.session_state.pib_total_expander_state = False
+    if "pib_vab_expander_state" not in st.session_state:
+        st.session_state.pib_vab_expander_state = False
+
     titulo_centralizado("Dashboard do PIB Municipal", 1)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
 
@@ -411,11 +458,14 @@ def show_page_pib(df_pib):
             ),
         },
     }
+
     display_pib_total_expander(
         df_filtrado=df_pib,
         titulo_expander="Indicadores do PIB Municipal",
         dicionario_indicadores=INDICADORES_PIB_TOTAL,
         key_prefix="pib_total",
+        expander_state_key="pib_total_expander_state",
+        callback_func=pib_total_callback,
     )
 
     display_pib_vab_expander(
@@ -423,4 +473,6 @@ def show_page_pib(df_pib):
         titulo_expander="Valor Adicionado Bruto (VAB) por Setor",
         vab_map=VAB_MAP,
         key_prefix="pib_VAB",
+        expander_state_key="pib_vab_expander_state",
+        callback_func=pib_vab_callback,
     )

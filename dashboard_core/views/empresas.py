@@ -23,12 +23,36 @@ def set_empresas_config(municipio, cores_municipios, ordem):
     Parâmetros:
       - municipio: str -> nome do município de interesse
       - cores_municipios: dict -> mapa de cores por município
-      - kwargs: dicionário para configurações extras (opcional)
+      - ordem: list -> ordem customizada para o tamanho dos estabelecimentos
     """
     global municipio_de_interesse, CORES_MUNICIPIOS, ordem_tamanho_estabelecimentos
     municipio_de_interesse = municipio
     CORES_MUNICIPIOS = cores_municipios or {}
     ordem_tamanho_estabelecimentos = ordem or []
+
+
+# --- FUNÇÕES DE CALLBACK ---
+
+
+def set_expander_open(key):
+    """Define o estado de um expander específico como True (aberto)."""
+    st.session_state[key] = True
+
+
+def cnpj_callback():
+    """Callback para manter o expander CNPJ Ativos aberto."""
+    set_expander_open("cnpj_ativos_expander_state")
+
+
+def mei_callback():
+    """Callback para manter o expander MEI Ativos aberto."""
+    set_expander_open("mei_ativos_expander_state")
+
+
+def estabelecimentos_callback():
+    """Callback para manter o expander Estabelecimentos aberto."""
+    # Este callback será usado nos seletores internos da função display_estabelecimentos
+    set_expander_open("estabelecimentos_expander_state")
 
 
 # ==============================================================================
@@ -177,9 +201,22 @@ def preparar_dados_grafico_empresas_ativas(df, df_cnae, df_cnae_saldo):
 
 
 def display_empresas_ativas_expander(
-    df, df_cnae, df_cnae_saldo, titulo_expander, key_prefix
+    df,
+    df_cnae,
+    df_cnae_saldo,
+    titulo_expander,
+    key_prefix,
+    expander_state_key,
+    callback_func,
 ):
-    with st.expander(f"{titulo_expander}", expanded=False):
+    """Renderiza a seção de CNPJ ou MEI Ativos."""
+
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(
+        f"{titulo_expander}", expanded=st.session_state[expander_state_key]
+    ):
         df_graf_total, df_graf_cnae, df_tab_cnae, df_tab_cnae_saldo = (
             preparar_dados_grafico_empresas_ativas(
                 df=df, df_cnae=df_cnae, df_cnae_saldo=df_cnae_saldo
@@ -188,19 +225,31 @@ def display_empresas_ativas_expander(
 
         anos_disponiveis = sorted(df["ano"].unique().tolist(), reverse=True)
         col1, col2 = st.columns(2)
+
+        ANO_SELECIONADO = None
+
         with col1:
             if not anos_disponiveis:
                 st.warning("Nenhum dado disponível para os filtros selecionados.")
             else:
+                # ADICIONADO CALLBACK
                 ANO_SELECIONADO = st.selectbox(
                     "Selecione o ano para o gráfico:",
                     options=anos_disponiveis,
                     index=0,
                     key=f"selecionar_ano_{key_prefix}",
+                    on_change=callback_func,
                 )
+
+        if ANO_SELECIONADO is None:
+            # Garante que o restante do código não execute se não houver dados
+            return
+
         tab_total, tab_setor, tab_cnae = st.tabs(
             [f"{titulo_expander} por Município", "Setor", "CNAE"]
         )
+
+        # Filtros de data após selecionar o ano
         df_graf_total_anos = df_graf_total[df_graf_total.index.year == ANO_SELECIONADO]
         df_graf_total_anos.index = [
             f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
@@ -227,7 +276,7 @@ def display_empresas_ativas_expander(
                 hover_label_format=",.0f",
                 color_map=CORES_MUNICIPIOS,
             )
-            st.plotly_chart(fig_total, width="stretch")
+            st.plotly_chart(fig_total, use_container_width=True)
 
         with tab_setor:
             titulo_centralizado(
@@ -244,16 +293,19 @@ def display_empresas_ativas_expander(
                 hover_label_format=",.0f",
                 color_map=CORES_MUNICIPIOS,
             )
-            st.plotly_chart(fig_setor, width="stretch")
+            st.plotly_chart(fig_setor, use_container_width=True)
 
         with tab_cnae:
+            # ADICIONADO CALLBACK
             view_mode = st.radio(
                 "Selecione a Análise:",
                 options=["Estoque", "Saldo"],
                 horizontal=True,
                 label_visibility="collapsed",
                 key=f"view_mode_cnae_{key_prefix}",
+                on_change=callback_func,
             )
+
             if view_mode == "Estoque":
                 colunas_do_ano = [
                     col
@@ -270,7 +322,7 @@ def display_empresas_ativas_expander(
                 tab_cnae = df_tab_cnae_filtrada.style.format(
                     lambda x: f"{x:,.0f}".replace(",", ".")
                 ).background_gradient(cmap="GnBu")
-                st.dataframe(tab_cnae, width="stretch")
+                st.dataframe(tab_cnae, use_container_width=True)
 
             if view_mode == "Saldo":
                 colunas_do_ano = [
@@ -288,11 +340,16 @@ def display_empresas_ativas_expander(
                 tab_cnae = df_tab_cnae_saldo_filtrada.style.format(
                     lambda x: f"{x:,.0f}".replace(",", ".")
                 ).background_gradient(cmap="coolwarm_r", axis=0)
-                st.dataframe(tab_cnae, width="stretch")
+                st.dataframe(tab_cnae, use_container_width=True)
 
 
 def render_estabelecimentos_grafico_tab(
-    df, coluna_agregacao, titulo_grafico, color_map=None, reorder_cols=None
+    df,
+    coluna_agregacao,
+    titulo_grafico,
+    color_map=None,
+    reorder_cols=None,
+    callback=None,
 ):
     """
     Função auxiliar para renderizar uma aba de Estabelecimentos com gráfico.
@@ -308,6 +365,9 @@ def render_estabelecimentos_grafico_tab(
     if reorder_cols and not df_grafico.empty:
         df_grafico = df_grafico.reindex(columns=reorder_cols, fill_value=0)
 
+    # Não há filtros explícitos nesta função que exijam callback, apenas renderização.
+    # O filtro de ano é manipulado fora dela, se necessário.
+
     fig = criar_grafico_barras(
         df=df_grafico,
         titulo="",
@@ -316,7 +376,7 @@ def render_estabelecimentos_grafico_tab(
         data_label_format=",.0f",
         hover_label_format=",.0f",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def render_estabelecimentos_tabela_tab(df, index_col, titulo, municipio_interesse):
@@ -339,11 +399,11 @@ def render_estabelecimentos_tabela_tab(df, index_col, titulo, municipio_interess
         fill_value=0,
     ).sort_values(by=ult_ano, ascending=False)
 
-    df_pivot.index.name = titulo.split(" por ")[-1]  # Ex: "CNAE - Grupo"
+    df_pivot.index.name = titulo.split(" por ")[-1]
 
     st.dataframe(
         df_pivot.style.format("{:,.0f}").background_gradient(cmap="GnBu"),
-        width="stretch",
+        use_container_width=True,
     )
 
 
@@ -353,9 +413,15 @@ def display_estabelecimentos(
     df_estabelecimentos_tamanho,
     municipio_interesse,
     color_map=None,
+    expander_state_key=None,
+    callback_func=None,
 ):
     """Exibe o expander com a análise de Estabelecimentos."""
-    with st.expander("Estabelecimentos", expanded=False):
+
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander("Estabelecimentos", expanded=st.session_state[expander_state_key]):
         tabs = st.tabs(
             ["Município", "Tamanho", "Setor", "CNAE - Grupo", "CNAE - Subclasse"]
         )
@@ -417,31 +483,54 @@ def show_page_empresas_ativas(
     df_estabelecimentos_cnae,
     df_estabelecimentos_tamanho,
 ):
+    # 1. INICIALIZAÇÃO DOS ESTADOS DOS EXPANDERS (Fechados por padrão)
+    if "cnpj_ativos_expander_state" not in st.session_state:
+        st.session_state.cnpj_ativos_expander_state = False
+    if "mei_ativos_expander_state" not in st.session_state:
+        st.session_state.mei_ativos_expander_state = False
+    if "estabelecimentos_expander_state" not in st.session_state:
+        st.session_state.estabelecimentos_expander_state = False
+
     titulo_centralizado("Dashboard de Empresas Ativas", 1)
 
     display_cnpj_kpi_cards(
         df_cnpj=df_cnpj, df_mei=df_mei, municipio_de_interesse=municipio_de_interesse
     )
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
+
+    # 2. CHAMADA AOS EXPANDERS COM ESTADO E CALLBACK
+
+    # CNPJ Ativos
     display_empresas_ativas_expander(
         df=df_cnpj,
         df_cnae=df_cnpj_cnae,
         df_cnae_saldo=df_cnpj_cnae_saldo,
         titulo_expander="CNPJ Ativos",
         key_prefix="cnpj_ativos",
+        expander_state_key="cnpj_ativos_expander_state",
+        callback_func=cnpj_callback,
     )
+
+    # MEI Ativos
     display_empresas_ativas_expander(
         df=df_mei,
         df_cnae=df_mei_cnae,
         df_cnae_saldo=df_mei_cnae_saldo,
         titulo_expander="MEI Ativos",
         key_prefix="mei_ativos",
+        expander_state_key="mei_ativos_expander_state",
+        callback_func=mei_callback,
     )
+
     st.markdown("###### Dados disponibilizados pela RAIS - Atualização Anual")
+
+    # Estabelecimentos
     display_estabelecimentos(
         df_estabelecimentos_mun=df_estabelecimentos_mun,
         df_estabelecimentos_cnae=df_estabelecimentos_cnae,
         df_estabelecimentos_tamanho=df_estabelecimentos_tamanho,
         municipio_interesse=municipio_de_interesse,
         color_map=CORES_MUNICIPIOS,
+        expander_state_key="estabelecimentos_expander_state",
+        callback_func=estabelecimentos_callback,
     )

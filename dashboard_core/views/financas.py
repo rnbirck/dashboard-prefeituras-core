@@ -21,6 +21,25 @@ def set_financas_config(cores_municipios):
     CORES_MUNICIPIOS = cores_municipios or {}
 
 
+# --- FUNÇÕES DE CALLBACK ---
+
+
+def set_expander_open(key):
+    """Define o estado de um expander específico como True (aberto)."""
+    st.session_state[key] = True
+
+
+def siconfi_callback():
+    """Callback para manter o expander SICONFI aberto."""
+    set_expander_open("siconfi_expander_state")
+
+
+def indicadores_callback():
+    """Callback para manter o expander Indicadores Financeiros aberto."""
+    # Este callback será usado nos seletores internos da função display_indicadores_financeiros
+    set_expander_open("indicadores_financeiros_expander_state")
+
+
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE FINANÇAS
 # ==============================================================================
@@ -76,11 +95,14 @@ def _pivot_siconfi_data(df_preparado, coluna_valor, coluna_filtro):
     return df_pivot
 
 
-def display_siconfi_consolidado(df, expanded=False):
+def display_siconfi_consolidado(df, expander_state_key, callback_func):
     """
     Exibe um expander consolidado para todos os indicadores do SICONFI
     com seletores internos.
     """
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
     # --- LÓGICA DOS ANOS ---
     if df.empty:
         st.warning("Não há dados financeiros (SICONFI) disponíveis.")
@@ -113,13 +135,17 @@ def display_siconfi_consolidado(df, expanded=False):
         # Adicione outras contas aqui (ex: Despesas)
     }
 
-    with st.expander("Indicadores Bimestrais da Execução Orçamentária", expanded=False):
+    with st.expander(
+        "Indicadores Bimestrais da Execução Orçamentária",
+        expanded=st.session_state[expander_state_key],
+    ):
         col1, col3, col2 = st.columns([0.5, 0.05, 0.45])
         with col1:
             conta_selecionada = st.selectbox(
                 "Selecione a Conta:",
                 options=list(CONTAS_SICONFI.keys()),
                 key="siconfi_conta_selectbox",
+                on_change=callback_func,
             )
             cod_conta = CONTAS_SICONFI[conta_selecionada]
 
@@ -129,6 +155,7 @@ def display_siconfi_consolidado(df, expanded=False):
                 options=["Valor (Milhões R$)", "Variação Anual (%)"],
                 horizontal=True,
                 key="siconfi_view_mode_radio",
+                on_change=callback_func,
             )
 
         col_radio1, col_radio3, col_radio2 = st.columns([0.5, 0.05, 0.45])
@@ -141,6 +168,7 @@ def display_siconfi_consolidado(df, expanded=False):
                 step=1,
                 key="siconfi_ano_slider",
                 format="%d",
+                on_change=callback_func,
             )
 
         with col_radio2:
@@ -149,6 +177,7 @@ def display_siconfi_consolidado(df, expanded=False):
                 options=["No Bimestre", "Até o Bimestre"],
                 horizontal=True,
                 key="siconfi_periodo_mode_radio",
+                on_change=callback_func,
             )
 
         start_ano_slider, end_ano_slider = anos_selecionados_slider
@@ -243,12 +272,20 @@ def display_indicadores_financeiros(
     data_label_format,
     hover_label_format,
     pdf_data,
+    expander_state_key,
+    callback_func,
 ):
-    with st.expander(f"{titulo_expander}", expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(
+        f"{titulo_expander}", expanded=st.session_state[expander_state_key]
+    ):
         indicador_selecionado = st.selectbox(
             "Selecione um Indicador Financeiro:",
             options=list(dicionario_indicadores.keys()),
             key=f"{key_prefix}_selectbox_indicadores",
+            on_change=callback_func,
         )
 
         coluna_selecionada, subtitulo = dicionario_indicadores[indicador_selecionado]
@@ -289,7 +326,7 @@ def display_indicadores_financeiros(
                 annotation_position="bottom right",
                 annotation_font_color="yellow",
             )
-        st.plotly_chart(fig, use_container_width=False)
+        st.plotly_chart(fig, use_container_width=True)
         titulo_centralizado(
             "Download do relatório metodológico que detalha a construção dos indicadores fiscais dos municípios",
             6,
@@ -308,6 +345,13 @@ def display_indicadores_financeiros(
 
 def show_page_financas(df_financas, df_indicadores_financeiros, pdf_indicadores):
     """Função principal que renderiza a página de Finanças Públicas."""
+
+    # 1. INICIALIZAÇÃO DOS ESTADOS DOS EXPANDERS (Fechados por padrão)
+    if "siconfi_expander_state" not in st.session_state:
+        st.session_state.siconfi_expander_state = False
+    if "indicadores_financeiros_expander_state" not in st.session_state:
+        st.session_state.indicadores_financeiros_expander_state = False
+
     titulo_centralizado("Dashboard de Finanças Públicas", 1)
     titulo_centralizado("Indicadores de Finanças Públicas", 3)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
@@ -346,6 +390,9 @@ def show_page_financas(df_financas, df_indicadores_financeiros, pdf_indicadores)
             "Quanto menor, melhor. Índices altos podem significar contas em atraso.",
         ),
     }
+
+    # 2. CHAMADAS AOS EXPANDERS COM ESTADO E CALLBACK
+
     display_indicadores_financeiros(
         df_filtrado=df_indicadores_financeiros,
         titulo_expander="Indicadores Financeiros",
@@ -355,8 +402,12 @@ def show_page_financas(df_financas, df_indicadores_financeiros, pdf_indicadores)
         hover_label_format=",.2f",
         data_label_format=",.1f",
         pdf_data=pdf_indicadores,
+        expander_state_key="indicadores_financeiros_expander_state",
+        callback_func=indicadores_callback,
     )
+
     display_siconfi_consolidado(
         df=df_financas,
-        expanded=True,
+        expander_state_key="siconfi_expander_state",
+        callback_func=siconfi_callback,
     )

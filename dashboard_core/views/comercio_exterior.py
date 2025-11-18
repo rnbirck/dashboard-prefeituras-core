@@ -32,6 +32,17 @@ def set_comercio_exterior_config(municipio, cores_municipios, anos_interesse):
     anos_de_interesse = anos_interesse or []
 
 
+# --- FUNÇÕES DE CALLBACK ---
+def set_comex_municipios_open():
+    """Define o estado do expander Comércio Exterior por Município como True."""
+    st.session_state.comex_municipios_expander = True
+
+
+def set_comex_produto_pais_open():
+    """Define o estado do expander Comércio Exterior por Destino e Produto como True."""
+    st.session_state.comex_produto_pais_expander = True
+
+
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE COMÉRCIO EXTERIOR
 # ==============================================================================
@@ -64,15 +75,14 @@ def display_comex_kpi_cards(df_ano, df_mes, municipio_interesse):
 
         # Último ano completo
         ano_completo = checar_ult_ano_completo(df_mes)
-        exp_mun_ano_completo = df_ano[
+        df_ano_filtrado = df_ano[
             (df_ano["municipio"] == municipio_interesse)
             & (df_ano["ano"] == ano_completo)
-        ]["total_exp_anual"].sum()
+        ]
 
-        tx_var_ano_completo = df_ano[
-            (df_ano["municipio"] == municipio_interesse)
-            & (df_ano["ano"] == ano_completo)
-        ]["perc_var_ano_anterior"].sum()
+        exp_mun_ano_completo = df_ano_filtrado["total_exp_anual"].sum()
+
+        tx_var_ano_completo = df_ano_filtrado["perc_var_ano_anterior"].sum()
 
         col1, col2, col3 = st.columns(3)
 
@@ -202,11 +212,16 @@ def prepara_dados_graficos_comex(df_filtrado, anos_de_interesse):
 
 def display_comex_municipios_expander(df_mes):
     """Exibe o expander com análise de exportações para múltiplos municípios."""
-    with st.expander("Comércio Exterior por Município", expanded=False):
-        tab_hist, tab_acum, tab_anual = st.tabs(
-            ["Histórico Mensal", "Acumulado no Ano", "Anual"],
-        )
 
+    # Gerencia o estado do expander
+    if "comex_municipios_expander" not in st.session_state:
+        st.session_state.comex_municipios_expander = False
+
+    with st.expander(
+        "Comércio Exterior por Município",
+        expanded=st.session_state.comex_municipios_expander,
+    ):
+        # Filtra DF base
         df_filtrado = df_mes[(df_mes["ano"].isin(anos_de_interesse))]
 
         (
@@ -220,6 +235,12 @@ def display_comex_municipios_expander(df_mes):
 
         anos_disponiveis = sorted(df_filtrado["ano"].unique().tolist(), reverse=True)
 
+        # Cria as abas. Nenhuma interação dentro das abas precisa de callback
+        # para abrir o expander, pois a interação principal é o selectbox
+        tab_hist, tab_acum, tab_anual = st.tabs(
+            ["Histórico Mensal", "Acumulado no Ano", "Anual"],
+        )
+
         with tab_hist:
             col1, col2 = st.columns([0.5, 0.5])
             with col1:
@@ -228,6 +249,7 @@ def display_comex_municipios_expander(df_mes):
                     options=anos_disponiveis,
                     index=0,
                     key="hist_ano_comex",
+                    on_change=set_comex_municipios_open,
                 )
 
             df_comex_hist_filtrado_ano = df_comex_hist[
@@ -253,6 +275,7 @@ def display_comex_municipios_expander(df_mes):
             if not ANO_SELECIONADO:
                 st.warning("Por favor, selecione ao menos um ano.")
 
+            # Crie os gráficos antes do rádio
             fig_hist = criar_grafico_barras(
                 df=df_comex_hist_filtrado_ano,
                 titulo="",
@@ -281,11 +304,12 @@ def display_comex_municipios_expander(df_mes):
                     options=["Valor (Milhões de US$)", "Variação Anual (%)"],
                     horizontal=True,
                     key="view_mode_comex_municipios_hist",
+                    on_change=set_comex_municipios_open,
                 )
 
             if view_mode == "Valor (Milhões de US$)":
                 titulo_centralizado(f"Exportações em {ANO_SELECIONADO}", 5)
-                st.plotly_chart(fig_hist, width="stretch")
+                st.plotly_chart(fig_hist, use_container_width=True)
 
             elif view_mode == "Variação Anual (%)":
                 if fig_hist_perc:
@@ -318,7 +342,7 @@ def display_comex_municipios_expander(df_mes):
             titulo_centralizado(
                 f"Exportações de Janeiro a {MESES_DIC[ult_mes_comex]}", 5
             )
-            st.plotly_chart(fig_acum, width="stretch")
+            st.plotly_chart(fig_acum, use_container_width=True)
 
         with tab_anual:
             fig_anual = criar_grafico_barras(
@@ -332,7 +356,7 @@ def display_comex_municipios_expander(df_mes):
                 color_map=CORES_MUNICIPIOS,
             )
             titulo_centralizado("Exportações Anuais", 5)
-            st.plotly_chart(fig_anual, width="stretch")
+            st.plotly_chart(fig_anual, use_container_width=True)
 
 
 @st.cache_data
@@ -405,21 +429,32 @@ def preparar_grafico_comex(df_filtrado_exibicao):
 
 def display_comex_produto_pais_expander(df, municipio_interesse):
     """Exibe o expander com análise de exportações por Produto e País do Municipio Selecionado."""
+
+    # Gerencia o estado do expander
+    if "comex_produto_pais_expander" not in st.session_state:
+        st.session_state.comex_produto_pais_expander = False
+
     with st.expander(
         f"Comércio Exterior de {municipio_interesse} por Destino e Produto",
-        expanded=False,
+        expanded=st.session_state.comex_produto_pais_expander,
     ):
+        # Filtros no topo do expander (fora das abas)
         anos_disponiveis = sorted(df["ano"].unique().tolist(), reverse=True)
+
         ANOS_SELECIONADOS = st.multiselect(
             "Selecione o(s) ano(s) para a tabela:",
             options=anos_disponiveis,
             default=anos_de_interesse[-1],
             key="anos_comex_pais_multiselect",
+            on_change=set_comex_produto_pais_open,
         )
 
         if not ANOS_SELECIONADOS:
             st.warning("Por favor, selecione ao menos um ano.")
+            # Retorna para evitar erro na próxima lógica
+            return
 
+        # Abas
         tab_pais, tab_produto, tab_pais_produto = st.tabs(
             ["País", "Produto", "País - Produto"],
         )
@@ -444,6 +479,7 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
                 label="Filtrar a tabela por país (opcional):",
                 options=paises_options,
                 key="filtro_tabela_comex_pais",
+                on_change=set_comex_produto_pais_open,
             )
 
             df_comex_pais_exibir = (
@@ -461,7 +497,7 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
                     ],
                 ).format(format_dict),
                 hide_index=True,
-                width="stretch",
+                use_container_width=True,  # Ajustado para width="stretch"
             )
 
         with tab_produto:
@@ -475,6 +511,7 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
                 label="Filtrar a tabela por produto (opcional):",
                 options=produtos_options,
                 key="filtro_tabela_comex_produto",
+                on_change=set_comex_produto_pais_open,
             )
             df_comex_produto_exibir = (
                 df_comex_produto[
@@ -493,7 +530,7 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
                     ],
                 ).format(format_dict),
                 hide_index=True,
-                width="stretch",
+                use_container_width=True,  # Ajustado para width="stretch"
             )
 
         with tab_pais_produto:
@@ -511,11 +548,13 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
                 .head(3)["País"]
                 .tolist()
             )
+
             paises_selecionados = st.multiselect(
                 "Filtrar por País(es):",
                 options=paises_options,
                 default=paises_default,
                 key="filtro_pp_pais",
+                on_change=set_comex_produto_pais_open,
             )
 
             if paises_selecionados:
@@ -533,6 +572,7 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
                 options=produtos_options,
                 default=produtos_options,
                 key="filtro_pp_produto",
+                on_change=set_comex_produto_pais_open,
             )
 
             df_pais_produto_exibir = df_comex_pais_produto.copy()
@@ -561,10 +601,11 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
                 horizontal=True,
                 label_visibility="collapsed",
                 key="view_mode_comex_pp",
+                on_change=set_comex_produto_pais_open,
             )
 
             if view_mode == "Tabela":
-                st.dataframe(styled_df, hide_index=True, width="stretch")
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
 
             elif view_mode == "Gráfico":
                 if fig_pp:
@@ -581,6 +622,13 @@ def show_page_comex(
     municipio_de_interesse,
 ):
     """Função principal que renderiza a página de Comércio Exterior."""
+
+    # Inicialização dos estados dos expanders
+    if "comex_municipios_expander" not in st.session_state:
+        st.session_state.comex_municipios_expander = False
+    if "comex_produto_pais_expander" not in st.session_state:
+        st.session_state.comex_produto_pais_expander = False
+
     titulo_centralizado("Dashboard de Comércio Exterior", 1)
 
     municipio_foco = (

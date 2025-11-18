@@ -27,6 +27,12 @@ def set_assistencia_social_config(municipio, cores_municipios):
     CORES_MUNICIPIOS = cores_municipios or {}
 
 
+# --- FUNÇÃO DE CALLBACK GLOBAL ---
+def set_assistencia_expander_open(key):
+    """Define o estado do expander específico como True (aberto)."""
+    st.session_state[key] = True
+
+
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE ASSISTENCIA SOCIAL
 # ==============================================================================
@@ -114,11 +120,20 @@ def preparar_dados_graficos_assistencia_social(df, coluna_selecionada):
 
 
 def display_assistencia(
-    df, titulo_expander, key_prefix, dicionario_indicadores, label_y, markdown_final
+    df,
+    titulo_expander,
+    key_prefix,
+    dicionario_indicadores,
+    label_y,
+    markdown_final,
+    expander_state_key,
+    callback_func,
 ):
     """Função genérica para exibir a seção do Cad Unico e do Bolsa Familia na pagina de Assistencia Social."""
 
-    with st.expander(f"{titulo_expander}", expanded=False):
+    with st.expander(
+        f"{titulo_expander}", expanded=st.session_state[expander_state_key]
+    ):
         titulo_centralizado(f"Indicadores do {titulo_expander}", 5)
         col1, col2 = st.columns([0.6, 0.5])
 
@@ -127,6 +142,7 @@ def display_assistencia(
                 "Selecione um indicador:",
                 options=list(dicionario_indicadores.keys()),
                 key=f"{key_prefix}_selectbox",
+                on_change=callback_func,
             )
 
         coluna_selecionada = dicionario_indicadores[indicador_selecionado]
@@ -135,6 +151,7 @@ def display_assistencia(
         )
 
         anos_disponiveis = sorted(df["ano"].unique().tolist(), reverse=True)
+        ANO_SELECIONADO = None
 
         with col2:
             if not anos_disponiveis:
@@ -145,31 +162,50 @@ def display_assistencia(
                     options=anos_disponiveis,
                     index=0,
                     key=f"selecionar_ano_{key_prefix}",
+                    on_change=callback_func,
                 )
 
-                df_graf_anos = df_graf[df_graf.index.year == ANO_SELECIONADO]
-                if not df_graf_anos.empty:
-                    df_graf_anos.index = [
-                        f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
-                        for date in df_graf_anos.index
-                    ]
+        df_graf_anos = pd.DataFrame()
+        if ANO_SELECIONADO is not None:
+            df_graf_anos = df_graf[df_graf.index.year == ANO_SELECIONADO]
+            if not df_graf_anos.empty:
+                df_graf_anos.index = [
+                    f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
+                    for date in df_graf_anos.index
+                ]
 
         titulo_centralizado(f"{indicador_selecionado} - {titulo_expander}", 5)
-        fig = criar_grafico_barras(
-            df=df_graf_anos,
-            titulo="",
-            label_y=f"{label_y}",
-            barmode="group",
-            height=400,
-            data_label_format=",.0f",
-            color_map=CORES_MUNICIPIOS,
-            hover_label_format=",.0f",
-        )
-        st.plotly_chart(fig, use_container_width=False)
+
+        if not df_graf_anos.empty:
+            fig = criar_grafico_barras(
+                df=df_graf_anos,
+                titulo="",
+                label_y=f"{label_y}",
+                barmode="group",
+                height=400,
+                data_label_format=",.0f",
+                color_map=CORES_MUNICIPIOS,
+                hover_label_format=",.0f",
+            )
+            st.plotly_chart(fig, use_container_width=False)
+        else:
+            st.info("Não há dados para o ano selecionado.")
+
         st.markdown(f"###### {markdown_final}")
 
 
 def show_page_assistencia_social(df_cad, df_bolsa, municipio_interesse):
+    if "cad_expander_state" not in st.session_state:
+        st.session_state.cad_expander_state = False
+    if "bolsa_expander_state" not in st.session_state:
+        st.session_state.bolsa_expander_state = False
+
+    def cad_callback():
+        return set_assistencia_expander_open("cad_expander_state")
+
+    def bolsa_callback():
+        return set_assistencia_expander_open("bolsa_expander_state")
+
     titulo_centralizado("Dashboard de Assistência Social", 1)
     INDICADORES_CAD = {
         "Total de Pessoas": "total_pessoas",
@@ -197,6 +233,8 @@ def show_page_assistencia_social(df_cad, df_bolsa, municipio_interesse):
         key_prefix="cad",
         label_y="Número de Cadastrados",
         markdown_final="*Dados para abril de 2025 não divulgados",
+        expander_state_key="cad_expander_state",
+        callback_func=cad_callback,
     )
 
     display_assistencia(
@@ -206,4 +244,6 @@ def show_page_assistencia_social(df_cad, df_bolsa, municipio_interesse):
         key_prefix="bolsa",
         label_y="",
         markdown_final="*Dados a partir de Março de 2023",
+        expander_state_key="bolsa_expander_state",
+        callback_func=bolsa_callback,
     )

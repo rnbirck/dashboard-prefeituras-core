@@ -19,6 +19,43 @@ def set_educacao_config(cores_municipios):
     CORES_MUNICIPIOS = cores_municipios or {}
 
 
+# --- FUNÇÕES DE CALLBACK ---
+
+
+def set_expander_open(key):
+    """Define o estado de um expander específico como True (aberto)."""
+    st.session_state[key] = True
+
+
+# Funções específicas para callbacks (melhorando a rastreabilidade em relação a lambdas)
+def escolas_callback():
+    set_expander_open("escolas_expander_state")
+
+
+def matriculas_callback():
+    set_expander_open("matriculas_expander_state")
+
+
+def docentes_callback():
+    set_expander_open("docentes_expander_state")
+
+
+def turmas_callback():
+    set_expander_open("turmas_expander_state")
+
+
+def rendimento_callback():
+    set_expander_open("rendimento_expander_state")
+
+
+def ideb_mun_callback():
+    set_expander_open("ideb_mun_expander_state")
+
+
+def ideb_escolas_callback():
+    set_expander_open("ideb_escolas_expander_state")
+
+
 @st.cache_data
 def preparar_dados_grafico_educacao(
     df_filtrado, coluna_selecionada, dependencia, municipios_selecionados
@@ -123,10 +160,17 @@ def display_educacao(
     label_y,
     data_label_format,
     hover_label_format,
+    expander_state_key,  # NOVO
+    callback_func,  # NOVO
 ):
     """Função genérica para exibir a seção de educacao matriculas e rendimento."""
 
-    with st.expander(f"{titulo_expander}", expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(
+        f"{titulo_expander}", expanded=st.session_state[expander_state_key]
+    ):
         titulo_centralizado(f"Indicadores de {titulo_expander}", 5)
         col1, col2 = st.columns([0.6, 0.4])
         with col1:
@@ -134,12 +178,14 @@ def display_educacao(
                 "Selecione um indicador:",
                 options=list(dicionario_indicadores.keys()),
                 key=f"{key_prefix}_selectbox_indicadores",
+                on_change=callback_func,  # ADICIONADO CALLBACK
             )
         with col2:
             dependecia_selecionada = st.selectbox(
                 "Selecione uma dependência:",
                 options=list(dicionario_dependencia.keys()),
                 key=f"{key_prefix}_selectbox_dependencia",
+                on_change=callback_func,  # ADICIONADO CALLBACK
             )
 
         coluna_selecionada = dicionario_indicadores[indicador_selecionado]
@@ -166,7 +212,9 @@ def display_educacao(
             hover_label_format=f"{hover_label_format}",
             color_map=CORES_MUNICIPIOS,
         )
-        st.plotly_chart(fig, use_container_width=False)
+        st.plotly_chart(
+            fig, use_container_width=True
+        )  # Ajustado para use_container_width=True
 
 
 def display_taxa_rendimento(
@@ -180,10 +228,17 @@ def display_taxa_rendimento(
     label_y,
     data_label_format,
     hover_label_format,
+    expander_state_key,  # NOVO
+    callback_func,  # NOVO
 ):
     """Função específica para Taxas de Rendimento com 3 seletores."""
 
-    with st.expander(f"{titulo_expander}", expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(
+        f"{titulo_expander}", expanded=st.session_state[expander_state_key]
+    ):
         titulo_centralizado(f"Indicadores de {titulo_expander}", 5)
 
         col1, col2, col3 = st.columns([0.3, 0.4, 0.3])
@@ -193,18 +248,21 @@ def display_taxa_rendimento(
                 "Selecione um indicador:",
                 options=list(dicionario_indicador_base.keys()),
                 key=f"{key_prefix}_selectbox_indicador",
+                on_change=callback_func,  # ADICIONADO CALLBACK
             )
         with col2:
             nivel_selecionado_label = st.selectbox(
                 "Selecione o nível de ensino:",
                 options=list(dicionario_nivel_ensino.keys()),
                 key=f"{key_prefix}_selectbox_nivel",
+                on_change=callback_func,  # ADICIONADO CALLBACK
             )
         with col3:
             dependencia_selecionada_label = st.selectbox(
                 "Selecione uma dependência:",
                 options=list(dicionario_dependencia.keys()),
                 key=f"{key_prefix}_selectbox_dependencia",
+                on_change=callback_func,  # ADICIONADO CALLBACK
             )
 
         indicador_base = dicionario_indicador_base[indicador_selecionado_label]
@@ -235,7 +293,9 @@ def display_taxa_rendimento(
             hover_label_format=f"{hover_label_format}",
             color_map=CORES_MUNICIPIOS,
         )
-        st.plotly_chart(fig, use_container_width=False)
+        st.plotly_chart(
+            fig, use_container_width=True
+        )  # Ajustado para use_container_width=True
 
 
 def display_ideb_mun(
@@ -246,10 +306,17 @@ def display_ideb_mun(
     dicionario_indicadores,
     dicionario_dependencia,
     dicionario_categoria,
+    expander_state_key,  # NOVO
+    callback_func,  # NOVO
 ):
     """Função genérica para exibir a seção de IDEB MUNCIPIOS."""
 
-    with st.expander(f"{titulo_expander}", expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(
+        f"{titulo_expander}", expanded=st.session_state[expander_state_key]
+    ):
         titulo_centralizado(f"Indicadores do {titulo_expander}", 5)
         titulo_centralizado(
             "O Índice de Desenvolvimento da Educação Básica (Ideb) reúne, em um só indicador, os resultados de dois conceitos igualmente importantes para a qualidade da educação: o fluxo escolar e as médias de desempenho nas avaliações. O Ideb é calculado a partir dos dados sobre aprovação escolar, obtidos no Censo Escolar, e das médias de desempenho no Sistema de Avaliação da Educação Básica (Saeb).",
@@ -261,18 +328,21 @@ def display_ideb_mun(
                 "Selecione uma etapa de ensino:",
                 options=list(dicionario_categoria.keys()),
                 key=f"{key_prefix}_selectbox_categoria",
+                on_change=callback_func,  # ADICIONADO CALLBACK
             )
         with col2:
             indicador_selecionado = st.selectbox(
                 "Selecione um indicador:",
                 options=list(dicionario_indicadores.keys()),
                 key=f"{key_prefix}_selectbox_indicadores",
+                on_change=callback_func,  # ADICIONADO CALLBACK
             )
         with col3:
             dependencia_selecionada = st.selectbox(
                 "Selecione uma dependência:",
                 options=list(dicionario_dependencia.keys()),
                 key=f"{key_prefix}_selectbox_dependencia",
+                on_change=callback_func,  # ADICIONADO CALLBACK
             )
 
         categoria = dicionario_categoria[categoria_selecionada]
@@ -306,7 +376,9 @@ def display_ideb_mun(
             hover_label_format=",.1f",
             color_map=CORES_MUNICIPIOS,
         )
-        st.plotly_chart(fig, use_container_width=False)
+        st.plotly_chart(
+            fig, use_container_width=True
+        )  # Ajustado para use_container_width=True
 
 
 def display_ideb_escolas(
@@ -315,8 +387,15 @@ def display_ideb_escolas(
     key_prefix,
     dicionario_dependencia,
     dicionario_categoria,
+    expander_state_key,  # NOVO
+    callback_func,  # NOVO
 ):
-    with st.expander(f"{titulo_expander}", expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(
+        f"{titulo_expander}", expanded=st.session_state[expander_state_key]
+    ):
         titulo_centralizado(f"Indicadores do {titulo_expander}", 5)
         titulo_centralizado(
             "O Índice de Desenvolvimento da Educação Básica (Ideb) reúne, em um só indicador, os resultados de dois conceitos igualmente importantes para a qualidade da educação: o fluxo escolar e as médias de desempenho nas avaliações. O Ideb é calculado a partir dos dados sobre aprovação escolar, obtidos no Censo Escolar, e das médias de desempenho no Sistema de Avaliação da Educação Básica (Saeb).",
@@ -331,6 +410,7 @@ def display_ideb_escolas(
                 options=anos_disponiveis,
                 index=0,
                 key="hist_ano_escolas",
+                on_change=callback_func,
             )
 
         df_filtrado = df_filtrado[df_filtrado["ano"] == ANO_SELECIONADO]
@@ -339,12 +419,14 @@ def display_ideb_escolas(
                 "Selecione uma etapa de ensino:",
                 options=list(dicionario_categoria.keys()),
                 key=f"{key_prefix}_selectbox_categoria",
+                on_change=callback_func,
             )
         with col3:
             dependencia_selecionada = st.selectbox(
                 "Selecione uma dependência:",
                 options=list(dicionario_dependencia.keys()),
                 key=f"{key_prefix}_selectbox_dependencia",
+                on_change=callback_func,
             )
 
         categoria = dicionario_categoria[categoria_selecionada]
@@ -371,7 +453,9 @@ def display_ideb_escolas(
             .background_gradient(cmap="GnBu")
         )
 
-        st.dataframe(df_tab_renomeado, width="stretch")
+        st.dataframe(
+            df_tab_renomeado, use_container_width=True
+        )  # Ajustado para use_container_width=True
 
 
 def show_page_educacao(
@@ -381,6 +465,22 @@ def show_page_educacao(
     df_ideb_escolas,
     municipios_selecionados_global,
 ):
+    # 1. INICIALIZAÇÃO DOS ESTADOS DOS EXPANDERS (Fechados por padrão)
+    if "escolas_expander_state" not in st.session_state:
+        st.session_state.escolas_expander_state = False
+    if "matriculas_expander_state" not in st.session_state:
+        st.session_state.matriculas_expander_state = False
+    if "docentes_expander_state" not in st.session_state:
+        st.session_state.docentes_expander_state = False
+    if "turmas_expander_state" not in st.session_state:
+        st.session_state.turmas_expander_state = False
+    if "rendimento_expander_state" not in st.session_state:
+        st.session_state.rendimento_expander_state = False
+    if "ideb_mun_expander_state" not in st.session_state:
+        st.session_state.ideb_mun_expander_state = False
+    if "ideb_escolas_expander_state" not in st.session_state:
+        st.session_state.ideb_escolas_expander_state = False
+
     titulo_centralizado("Dashboard de Educação", 1)
 
     DEPENDENCIA = {
@@ -463,6 +563,10 @@ def show_page_educacao(
 
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
     st.markdown("###### Indicadores do Censo Escolar")
+
+    # CHAMADAS COM CALLBACKS
+
+    # 1. Escolas
     display_educacao(
         df_filtrado=df_matriculas,
         titulo_expander="Escolas",
@@ -473,8 +577,11 @@ def show_page_educacao(
         label_y="Número de Escolas",
         hover_label_format=",.0f",
         data_label_format=",.0f",
+        expander_state_key="escolas_expander_state",
+        callback_func=escolas_callback,
     )
 
+    # 2. Matrículas
     display_educacao(
         df_filtrado=df_matriculas,
         titulo_expander="Matrículas",
@@ -485,8 +592,11 @@ def show_page_educacao(
         label_y="Número de Matrículas",
         hover_label_format=",.0f",
         data_label_format=",.0f",
+        expander_state_key="matriculas_expander_state",
+        callback_func=matriculas_callback,
     )
 
+    # 3. Docentes
     display_educacao(
         df_filtrado=df_matriculas,
         titulo_expander="Docentes",
@@ -497,8 +607,11 @@ def show_page_educacao(
         label_y="Número de Docentes",
         hover_label_format=",.0f",
         data_label_format=",.0f",
+        expander_state_key="docentes_expander_state",
+        callback_func=docentes_callback,
     )
 
+    # 4. Turmas
     display_educacao(
         df_filtrado=df_matriculas,
         titulo_expander="Turmas",
@@ -509,25 +622,33 @@ def show_page_educacao(
         label_y="Número de Turmas",
         hover_label_format=",.0f",
         data_label_format=",.0f",
+        expander_state_key="turmas_expander_state",
+        callback_func=turmas_callback,
     )
+
     st.markdown("###### Taxas de Rendimento Escolar")
 
+    # 5. Taxas de Rendimento
     display_taxa_rendimento(
         df_filtrado=df_rendimento,
         titulo_expander="Taxas de Rendimento",
         municipios_selecionados=municipios_selecionados_global,
         dicionario_dependencia=DEPENDENCIA_RENDIMENTO,
-        dicionario_indicador_base=INDICADOR_BASE_RENDIMENTO,  # Novo
-        dicionario_nivel_ensino=NIVEL_ENSINO_RENDIMENTO,  # Novo
+        dicionario_indicador_base=INDICADOR_BASE_RENDIMENTO,
+        dicionario_nivel_ensino=NIVEL_ENSINO_RENDIMENTO,
         key_prefix="rendimento",
-        label_y="Taxa (%)",  # Label atualizado
+        label_y="Taxa (%)",
         hover_label_format=",.1f",
         data_label_format=",.1f",
+        expander_state_key="rendimento_expander_state",
+        callback_func=rendimento_callback,
     )
+
     st.markdown(
         "###### Índice de Desenvolvimento da Educação Básica (IDEB) e Notas do SAEB"
     )
 
+    # 6. IDEB - Municípios
     display_ideb_mun(
         df_filtrado=df_ideb_municipio,
         titulo_expander="IDEB - Municípios",
@@ -536,12 +657,17 @@ def show_page_educacao(
         dicionario_indicadores=INDICADOR_IDEB,
         dicionario_categoria=CATEGORIA_IDEB,
         key_prefix="ideb",
+        expander_state_key="ideb_mun_expander_state",
+        callback_func=ideb_mun_callback,
     )
 
+    # 7. IDEB - Escolas
     display_ideb_escolas(
         df_filtrado=df_ideb_escolas,
         titulo_expander="IDEB - Escolas",
         dicionario_dependencia=DEPENDENCIA_ESCOLAS,
         dicionario_categoria=CATEGORIA_IDEB,
         key_prefix="ideb_escolas",
+        expander_state_key="ideb_escolas_expander_state",
+        callback_func=ideb_escolas_callback,
     )

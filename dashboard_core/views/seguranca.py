@@ -25,6 +25,30 @@ def set_seguranca_config(cores_municipios):
     CORES_MUNICIPIOS = cores_municipios or {}
 
 
+# --- FUNÇÕES DE CALLBACK ---
+
+
+def set_expander_open(key):
+    """Define o estado de um expander específico como True (aberto)."""
+    st.session_state[key] = True
+
+
+# Funções específicas para callbacks
+def geral_callback():
+    """Callback para manter o expander Indicadores Gerais aberto."""
+    set_expander_open("geral_expander_state")
+
+
+def mulher_callback():
+    """Callback para manter o expander Violência Contra a Mulher aberto."""
+    set_expander_open("mulher_expander_state")
+
+
+def drogas_callback():
+    """Callback para manter o expander Crimes Relacionados à Drogas e Armas aberto."""
+    set_expander_open("drogas_expander_state")
+
+
 # ==============================================================================
 # FUNÇÕES DA PÁGINA DE SEGURANÇA
 # ==============================================================================
@@ -34,7 +58,6 @@ def set_seguranca_config(cores_municipios):
 def preparar_dados_graficos_seguranca(df_filtrado, coluna_selecionada, is_taxa=False):
     """
     Prepara os DataFrames pivotados para as abas da página de segurança.
-
     """
     df_hist, df_acum, df_anual = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     ult_ano, ult_mes = None, None
@@ -96,10 +119,15 @@ def display_secao_seguranca(
     titulo_expander,
     dicionario_indicadores,
     key_prefix,
+    expander_state_key,
+    callback_func,
     label_taxa="Taxa por 10 mil hab.",
 ):
     """Função genérica para exibir uma seção de indicadores de segurança com opção de taxa."""
-    with st.expander(titulo_expander, expanded=False):
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
         # --- WIDGETS DE FILTRO ---
         col1, col2 = st.columns([0.6, 0.4])
 
@@ -108,6 +136,7 @@ def display_secao_seguranca(
                 "Selecione um indicador:",
                 options=list(dicionario_indicadores.keys()),
                 key=f"{key_prefix}_selectbox",
+                on_change=callback_func,
             )
         coluna_selecionada = dicionario_indicadores[indicador_selecionado]
 
@@ -118,6 +147,7 @@ def display_secao_seguranca(
                 options=["Número de Ocorrências", label_taxa],
                 horizontal=True,
                 key=f"view_mode_{key_prefix}",
+                on_change=callback_func,
             )
 
         # --- PREPARAÇÃO DOS DADOS COM BASE NA ESCOLHA DO USUÁRIO ---
@@ -147,6 +177,7 @@ def display_secao_seguranca(
                     options=anos_disponiveis,
                     index=0,
                     key=f"{key_prefix}_hist_ano",
+                    on_change=callback_func,
                 )
                 titulo_centralizado(
                     f"{indicador_selecionado} - Histórico Mensal em {ANO_SELECIONADO}",
@@ -213,8 +244,17 @@ def display_secao_seguranca(
 
 
 def show_page_seguranca(df_seguranca, df_seguranca_taxa):
+    # 1. Inicialização dos estados dos expanders
+    if "geral_expander_state" not in st.session_state:
+        st.session_state.geral_expander_state = False
+    if "mulher_expander_state" not in st.session_state:
+        st.session_state.mulher_expander_state = False
+    if "drogas_expander_state" not in st.session_state:
+        st.session_state.drogas_expander_state = False
+
     titulo_centralizado("Dashboard de Segurança", 1)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
+
     # Dicionário de Indicadores Gerais
     INDICADORES_GERAIS = {
         "Homicídio Doloso": "homicidio_doloso",
@@ -248,6 +288,8 @@ def show_page_seguranca(df_seguranca, df_seguranca_taxa):
         "Indicadores Gerais",
         INDICADORES_GERAIS,
         "geral",
+        expander_state_key="geral_expander_state",
+        callback_func=geral_callback,
     )
     display_secao_seguranca(
         df_seguranca,
@@ -255,6 +297,8 @@ def show_page_seguranca(df_seguranca, df_seguranca_taxa):
         "Violência Contra a Mulher",
         INDICADORES_VIOLENCIA_MULHER,
         "mulher",
+        expander_state_key="mulher_expander_state",
+        callback_func=mulher_callback,
         label_taxa="Taxa por 10 mil mulheres",
     )
     display_secao_seguranca(
@@ -263,4 +307,6 @@ def show_page_seguranca(df_seguranca, df_seguranca_taxa):
         "Crimes Relacionados à Drogas e Armas",
         INDICADORES_DROGAS_ARMAS,
         "drogas",
+        expander_state_key="drogas_expander_state",
+        callback_func=drogas_callback,
     )
