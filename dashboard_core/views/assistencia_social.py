@@ -171,7 +171,7 @@ def display_secao_assistencia_padrao(
     with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
         # Mensagem informativa específica para Cadastro Único
         if key_prefix == "cad":
-            st.info("ℹ️ Dados do CadÚnico para março de 2025 não foram divulgados.")
+            st.info("ℹ️ Dados do CadÚnico para abril de 2025 não foram divulgados.")
 
         # Mensagem informativa específica para Novo Bolsa Família
         if key_prefix == "bolsa":
