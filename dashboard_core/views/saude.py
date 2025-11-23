@@ -9,16 +9,18 @@ from dashboard_core.utils import (
 )
 
 CORES_MUNICIPIOS = {}
+ANOS_DE_INTERESSE = []
 
 
-def set_saude_config(cores_municipios):
+def set_saude_config(cores_municipios, anos_de_interesse):
     """
     Configura valores específicos do município que antes eram importados
     do dashboard_core.config. Deve ser chamado pelo app.py antes de
     renderizar a página de saude.
     """
-    global CORES_MUNICIPIOS
+    global CORES_MUNICIPIOS, ANOS_DE_INTERESSE
     CORES_MUNICIPIOS = cores_municipios or {}
+    ANOS_DE_INTERESSE = anos_de_interesse or []
 
 
 # --- FUNÇÕES DE CALLBACK ---
@@ -68,21 +70,35 @@ def leitos_callback():
 
 
 def preparar_dados_graficos_saude_mensal(
-    df_filtrado, coluna_selecionada, metodo_agg="sum"
+    df_filtrado, coluna_selecionada, metodo_agg="sum", anos_visualizacao=None
 ):
     """
     Prepara os DataFrames para os gráficos, usando o método de agregação correto.
     'sum' para números absolutos, 'mean' para taxas/proporções.
+    Retorna também DataFrames de variação.
     """
-    df_hist, df_acum, df_anual = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    df_hist = pd.DataFrame()
+    df_acum, df_acum_var = pd.DataFrame(), pd.DataFrame()
+    df_anual, df_anual_var = pd.DataFrame(), pd.DataFrame()
     ult_ano, ult_mes = None, None
 
     if not df_filtrado.empty:
-        ult_ano = df_filtrado["ano"].max()
+        # Se anos_visualizacao for fornecido, usa para determinar o último ano
+        if anos_visualizacao:
+            df_range_visualizacao = df_filtrado[
+                df_filtrado["ano"].isin(anos_visualizacao)
+            ]
+            if df_range_visualizacao.empty:
+                ult_ano = df_filtrado["ano"].max()
+            else:
+                ult_ano = df_range_visualizacao["ano"].max()
+        else:
+            ult_ano = df_filtrado["ano"].max()
+
         ult_mes = df_filtrado[df_filtrado["ano"] == ult_ano]["mes"].max()
 
-        # Histórico Mensal
-        df_hist = (
+        # Evolução Mensal
+        df_hist_full = (
             df_filtrado.assign(
                 date=lambda x: pd.to_datetime(
                     x["ano"].astype(str)
@@ -101,12 +117,19 @@ def preparar_dados_graficos_saude_mensal(
             .sort_index()
         )
 
+        # Filtra Evolução por anos de interesse
+        if anos_visualizacao:
+            df_hist = df_hist_full[df_hist_full.index.year.isin(anos_visualizacao)]
+        else:
+            df_hist = df_hist_full
+
         # Lógica de Agregação para Acumulado e Anual
         agg_func = "mean" if metodo_agg == "mean" else "sum"
+        is_taxa = metodo_agg == "mean"  # Se for mean, é taxa/proporção
 
         # Acumulado no Ano
         df_acum_temp = df_filtrado[df_filtrado["mes"] <= ult_mes]
-        df_acum = df_acum_temp.pivot_table(
+        df_acum_full = df_acum_temp.pivot_table(
             index="ano",
             columns="municipio",
             values=coluna_selecionada,
@@ -114,30 +137,78 @@ def preparar_dados_graficos_saude_mensal(
             fill_value=0,
         ).sort_index()
 
+        # Calcula variação (diferença para taxas, percentual para valores absolutos)
+        if is_taxa:
+            df_acum_var_full = df_acum_full.diff()
+        else:
+            df_acum_var_full = df_acum_full.pct_change() * 100
+
+        # Aplica filtro de anos apenas aos valores absolutos
+        if anos_visualizacao:
+            df_acum = df_acum_full[df_acum_full.index.isin(anos_visualizacao)]
+        else:
+            df_acum = df_acum_full
+        df_acum_var = df_acum_var_full  # Variação mantém todos os anos
+
         # Anual
         ano_completo = checar_ult_ano_completo(df_filtrado)
         df_anual_temp = df_filtrado[df_filtrado["ano"] <= ano_completo]
-        df_anual = df_anual_temp.pivot_table(
+        df_anual_full = df_anual_temp.pivot_table(
             index="ano",
             columns="municipio",
             values=coluna_selecionada,
             aggfunc=agg_func,
             fill_value=0,
-        ).sort_index(ascending=False)
+        ).sort_index()
 
-    return df_hist, df_acum, df_anual, ult_ano, ult_mes
+        # Calcula variação
+        if is_taxa:
+            df_anual_var_full = df_anual_full.diff()
+        else:
+            df_anual_var_full = df_anual_full.pct_change() * 100
+
+        # Aplica filtro de anos apenas aos valores absolutos
+        if anos_visualizacao:
+            df_anual = df_anual_full[
+                df_anual_full.index.isin(anos_visualizacao)
+            ].sort_index(ascending=False)
+        else:
+            df_anual = df_anual_full.sort_index(ascending=False)
+        df_anual_var = df_anual_var_full  # Variação mantém todos os anos
+
+    return df_hist, df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
 
 
-def preparar_dados_graficos_saude_anual(df_filtrado, coluna_selecionada):
-    df_anual = df_filtrado.pivot_table(
+def preparar_dados_graficos_saude_anual(
+    df_filtrado, coluna_selecionada, is_percentual=False, anos_visualizacao=None
+):
+    """
+    Prepara os DataFrames para os gráficos anuais.
+    Retorna também DataFrame de variação.
+    """
+    df_anual_full = df_filtrado.pivot_table(
         index="ano",
         columns="municipio",
         values=coluna_selecionada,
         aggfunc="sum",
         fill_value=0,
-    ).sort_index(ascending=False)
+    ).sort_index()
 
-    return df_anual
+    # Calcula variação (diferença para percentuais/coberturas, percentual para valores absolutos)
+    if is_percentual:
+        df_anual_var = df_anual_full.diff()
+    else:
+        df_anual_var = df_anual_full.pct_change() * 100
+
+    # Aplica filtro de anos apenas aos valores absolutos
+    if anos_visualizacao:
+        df_anual = df_anual_full[
+            df_anual_full.index.isin(anos_visualizacao)
+        ].sort_index(ascending=False)
+    else:
+        df_anual = df_anual_full.sort_index(ascending=False)
+
+    return df_anual, df_anual_var
 
 
 def display_saude_expander(
@@ -164,25 +235,45 @@ def display_saude_expander(
             indicador_selecionado
         ]
 
+        # Verifica se é taxa/proporção para definir tipo de variação
+        is_taxa = agg_method == "mean"
+        label_var = "Variação (p.p.)" if is_taxa else "Variação (%)"
+        fmt_var = "+,.2f" if is_taxa else "+,.1f"
+
         hover_format = (
             f",.{int(data_format.split('.')[-1][0]) + 1}f"
             if "." in data_format
             else ",.0f"
         )
 
-        df_hist, df_acum, df_anual, ult_ano, ult_mes = (
+        df_hist, df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes = (
             preparar_dados_graficos_saude_mensal(
-                df_filtrado, coluna_selecionada, agg_method
+                df_filtrado,
+                coluna_selecionada,
+                agg_method,
+                anos_visualizacao=ANOS_DE_INTERESSE,
             )
         )
 
         anos_disponiveis = sorted(df_filtrado["ano"].unique().tolist(), reverse=True)
 
-        tab_hist, tab_acum, tab_anual = st.tabs(
-            ["Histórico Mensal", "Acumulado no Ano", "Anual"]
+        # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
+        key_main_tab = f"main_tab_nav_{key_prefix}"
+        if key_main_tab not in st.session_state:
+            st.session_state[key_main_tab] = "Evolução Mensal"
+
+        aba_selecionada = st.pills(
+            "Selecione o tipo de análise temporal:",
+            options=["Evolução Mensal", "Acumulado no Ano", "Anual"],
+            selection_mode="single",
+            key=key_main_tab,
         )
 
-        with tab_hist:
+        if not aba_selecionada:
+            aba_selecionada = "Evolução Mensal"
+
+        # --- ABA 1: Evolução MENSAL ---
+        if aba_selecionada == "Evolução Mensal":
             if not anos_disponiveis:
                 st.warning("Nenhum dado disponível para os filtros selecionados.")
             else:
@@ -194,7 +285,7 @@ def display_saude_expander(
                     on_change=callback_func,
                 )
                 titulo_centralizado(
-                    f"{indicador_selecionado} - Histórico Mensal em {ANO_SELECIONADO}",
+                    f"{indicador_selecionado} - Evolução Mensal em {ANO_SELECIONADO}",
                     5,
                 )
 
@@ -205,55 +296,146 @@ def display_saude_expander(
                         for date in df_hist_ano.index
                     ]
 
-                fig = criar_grafico_barras(
-                    df=df_hist_ano,
-                    titulo="",
-                    label_y=label_y,
-                    barmode="group",
-                    height=400,
-                    data_label_format=data_format,
-                    hover_label_format=hover_format,
-                    color_map=CORES_MUNICIPIOS,
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                    fig = criar_grafico_barras(
+                        df=df_hist_ano,
+                        titulo="",
+                        label_y=label_y,
+                        barmode="group",
+                        height=400,
+                        data_label_format=data_format,
+                        hover_label_format=hover_format,
+                        color_map=CORES_MUNICIPIOS,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info(f"Sem dados mensais para {ANO_SELECIONADO}.")
 
-        if ult_mes:
-            with tab_acum:
-                df_acum.index = (
-                    "Jan-"
-                    + MESES_DIC[ult_mes][:3]
-                    + "/"
-                    + df_acum.index.astype(str).str.slice(-2)
-                )
-                titulo_centralizado(
-                    f"{indicador_selecionado} - Acumulado de Janeiro a {MESES_DIC[ult_mes]}",
-                    5,
-                )
-                fig = criar_grafico_barras(
-                    df=df_acum,
-                    titulo="",
-                    label_y=label_y,
-                    barmode="group",
-                    height=400,
-                    data_label_format=data_format,
-                    hover_label_format=hover_format,
-                    color_map=CORES_MUNICIPIOS,
-                )
-                st.plotly_chart(fig, use_container_width=True)
+        # --- ABA 2: ACUMULADO NO ANO ---
+        elif aba_selecionada == "Acumulado no Ano":
+            if ult_mes:
+                # Seletor de modo
+                key_acum = f"acum_mode_{key_prefix}"
+                if key_acum not in st.session_state:
+                    st.session_state[key_acum] = label_y
 
-        with tab_anual:
-            titulo_centralizado(f"{indicador_selecionado} - Análise Anual", 5)
-            fig = criar_grafico_barras(
-                df=df_anual,
-                titulo="",
-                label_y=label_y,
-                barmode="group",
-                height=400,
-                data_label_format=data_format,
-                hover_label_format=hover_format,
-                color_map=CORES_MUNICIPIOS,
+                modo_acum = st.segmented_control(
+                    "Visualizar:",
+                    options=[label_y, label_var],
+                    key=key_acum,
+                    selection_mode="single",
+                    on_change=callback_func,
+                )
+
+                if not modo_acum:
+                    modo_acum = label_y
+
+                periodo_txt = f"Jan a {MESES_DIC[ult_mes][:3]}"
+
+                if modo_acum == label_var:
+                    titulo_centralizado(
+                        f"{indicador_selecionado} - {label_var} - {periodo_txt}", 5
+                    )
+                    df_var_plot = df_acum_var.copy().sort_index(ascending=True)
+
+                    # Remove anos com variação nula
+                    df_var_plot = df_var_plot.dropna(how="all")
+
+                    df_var_plot.index = (
+                        "Jan-"
+                        + MESES_DIC[ult_mes][:3]
+                        + "/"
+                        + df_var_plot.index.astype(str).str.slice(-2)
+                    )
+
+                    fig = criar_grafico_barras(
+                        df=df_var_plot,
+                        titulo="",
+                        label_y=label_var,
+                        barmode="group",
+                        height=400,
+                        data_label_format=fmt_var,
+                        hover_label_format=fmt_var,
+                        color_map=CORES_MUNICIPIOS,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    df_plot = df_acum.copy()
+                    df_plot.index = (
+                        "Jan-"
+                        + MESES_DIC[ult_mes][:3]
+                        + "/"
+                        + df_plot.index.astype(str).str.slice(-2)
+                    )
+                    titulo_centralizado(
+                        f"{indicador_selecionado} - {periodo_txt}",
+                        5,
+                    )
+                    fig = criar_grafico_barras(
+                        df=df_plot,
+                        titulo="",
+                        label_y=label_y,
+                        barmode="group",
+                        height=400,
+                        data_label_format=data_format,
+                        hover_label_format=hover_format,
+                        color_map=CORES_MUNICIPIOS,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Dados acumulados não disponíveis.")
+
+        # --- ABA 3: ANUAL ---
+        elif aba_selecionada == "Anual":
+            # Seletor de modo
+            key_anual = f"anual_mode_{key_prefix}"
+            if key_anual not in st.session_state:
+                st.session_state[key_anual] = label_y
+
+            modo_anual = st.segmented_control(
+                "Visualizar:",
+                options=[label_y, label_var],
+                key=key_anual,
+                selection_mode="single",
+                on_change=callback_func,
             )
-            st.plotly_chart(fig, use_container_width=True)
+
+            if not modo_anual:
+                modo_anual = label_y
+
+            if modo_anual == label_var:
+                titulo_centralizado(f"{indicador_selecionado} - {label_var} Anual", 5)
+                df_var_plot = df_anual_var.copy()
+
+                # Remove anos com variação nula
+                df_var_plot = df_var_plot.dropna(how="all")
+
+                df_var_plot = df_var_plot.sort_index(ascending=True)
+                df_var_plot.index = df_var_plot.index.astype(str)
+
+                fig = criar_grafico_barras(
+                    df=df_var_plot,
+                    titulo="",
+                    label_y=label_var,
+                    barmode="group",
+                    height=400,
+                    data_label_format=fmt_var,
+                    hover_label_format=fmt_var,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                titulo_centralizado(f"{indicador_selecionado} - Análise Anual", 5)
+                fig = criar_grafico_barras(
+                    df=df_anual,
+                    titulo="",
+                    label_y=label_y,
+                    barmode="group",
+                    height=400,
+                    data_label_format=data_format,
+                    hover_label_format=hover_format,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
 
 
 def display_saude_anual_expander(
@@ -279,31 +461,77 @@ def display_saude_anual_expander(
             indicador_selecionado
         ]
 
+        # Verifica se é percentual/cobertura para definir tipo de variação
+        is_percentual = (
+            "(%)" in indicador_selecionado
+            or "Cobertura" in indicador_selecionado
+            or "Percentual" in indicador_selecionado
+        )
+        label_var = "Variação (p.p.)" if is_percentual else "Variação (%)"
+        fmt_var = "+,.2f" if is_percentual else "+,.1f"
+
         hover_format = (
             f",.{int(data_format.split('.')[-1][0]) + 1}f"
             if "." in data_format
             else ",.0f"
         )
 
-        df_anual = preparar_dados_graficos_saude_anual(
-            df_filtrado=df_filtrado, coluna_selecionada=coluna_selecionada
-        )
-        titulo_centralizado(
-            f"{indicador_selecionado}",
-            5,
+        df_anual, df_anual_var = preparar_dados_graficos_saude_anual(
+            df_filtrado=df_filtrado,
+            coluna_selecionada=coluna_selecionada,
+            is_percentual=is_percentual,
+            anos_visualizacao=ANOS_DE_INTERESSE,
         )
 
-        fig = criar_grafico_barras(
-            df=df_anual,
-            titulo="",
-            label_y=label_y,
-            barmode="group",
-            height=400,
-            data_label_format=data_format,
-            hover_label_format=hover_format,
-            color_map=CORES_MUNICIPIOS,
+        # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
+        key_main_tab = f"main_tab_nav_{key_prefix}"
+        if key_main_tab not in st.session_state:
+            st.session_state[key_main_tab] = label_y
+
+        aba_selecionada = st.pills(
+            "Selecione a visualização:",
+            options=[label_y, label_var],
+            selection_mode="single",
+            key=key_main_tab,
         )
-        st.plotly_chart(fig, use_container_width=True)
+
+        if not aba_selecionada:
+            aba_selecionada = label_y
+
+        if aba_selecionada == label_var:
+            titulo_centralizado(f"{indicador_selecionado} - {label_var}", 5)
+            df_var_plot = df_anual_var.copy()
+
+            # Remove anos com variação nula
+            df_var_plot = df_var_plot.dropna(how="all")
+
+            df_var_plot = df_var_plot.sort_index(ascending=True)
+            df_var_plot.index = df_var_plot.index.astype(str)
+
+            fig = criar_grafico_barras(
+                df=df_var_plot,
+                titulo="",
+                label_y=label_var,
+                barmode="group",
+                height=400,
+                data_label_format=fmt_var,
+                hover_label_format=fmt_var,
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            titulo_centralizado(f"{indicador_selecionado}", 5)
+            fig = criar_grafico_barras(
+                df=df_anual,
+                titulo="",
+                label_y=label_y,
+                barmode="group",
+                height=400,
+                data_label_format=data_format,
+                hover_label_format=hover_format,
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 
 # ==============================================================================
@@ -356,6 +584,12 @@ def show_page_saude(
         ),
         "Proporção de Óbitos com Causas Definidas (%)": (
             "prop_obitos_causas_definidas",
+            "mean",
+            "Proporção (%)",
+            ".1f",
+        ),
+        "Proporção de Óbitos com Causas Não Definidas (%)": (
+            "prop_obitos_causa_nao_definida",
             "mean",
             "Proporção (%)",
             ".1f",

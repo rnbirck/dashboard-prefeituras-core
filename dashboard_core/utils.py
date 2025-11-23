@@ -194,6 +194,54 @@ def calcular_yoy(df, municipio, ultimo_mes, ultimo_ano, coluna, round):
     return None
 
 
+@st.cache_data(show_spinner=False)
+def calcular_variacao_yoy(
+    df,
+    coluna_valor,
+    periodo="mensal",
+    colunas_grupo=None,
+    ano_col="ano",
+    mes_col="mes",
+    casas_decimais=2,
+):
+    if df is None or df.empty:
+        return df
+
+    colunas_grupo = [col for col in (colunas_grupo or []) if col in df.columns]
+
+    cols_necessarias = list(set(colunas_grupo + [ano_col, mes_col, coluna_valor]))
+    df_proc = df[cols_necessarias].copy()
+
+    chave_periodo = list(colunas_grupo)
+    if periodo in {"mensal", "acumulado"} and mes_col in df_proc.columns:
+        chave_periodo.append(mes_col)
+
+    ordenacao = [c for c in (chave_periodo + [ano_col]) if c in df_proc.columns]
+    df_proc = df_proc.sort_values(by=ordenacao)
+
+    nome_ano_anterior = f"{coluna_valor}_ano_anterior"
+
+    if chave_periodo:
+        df_proc[nome_ano_anterior] = df_proc.groupby(chave_periodo, dropna=False)[
+            coluna_valor
+        ].shift(1)
+    else:
+        df_proc[nome_ano_anterior] = df_proc[coluna_valor].shift(1)
+
+    nome_yoy = f"{coluna_valor}_yoy"
+
+    df_proc[nome_yoy] = (
+        ((df_proc[coluna_valor] / df_proc[nome_ano_anterior]) - 1) * 100
+    ).round(casas_decimais)
+
+    mask_invalid = (df_proc[nome_ano_anterior] == 0) | (
+        df_proc[nome_ano_anterior].isna()
+    )
+    df_proc.loc[mask_invalid, nome_yoy] = pd.NA
+
+    return df_proc
+
+
 def criar_grafico_barras(
     df,
     titulo,
@@ -252,11 +300,11 @@ def criar_grafico_barras(
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.1,
+            y=1.2,
             xanchor="left",
             x=0,
             title="",
-            font=dict(size=15),
+            font=dict(size=14),
         ),
     )
 
@@ -578,3 +626,24 @@ def to_excel(df: pd.DataFrame) -> bytes:
     # Pega o valor dos bytes do buffer de memória
     processed_data = output.getvalue()
     return processed_data
+
+
+def style_saldo_variacao(val):
+    """
+    Aplica formatação condicional (background color) para valores numéricos.
+    Pode ser usado tanto para Saldo (inteiros) quanto Variação (percentuais).
+
+    Regra:
+    - Valor > 0: Fundo Verde Claro (#c8e6c9), Texto Verde Escuro (#1b5e20)
+    - Valor < 0: Fundo Vermelho Claro (#ffcdd2), Texto Vermelho Escuro (#b71c1c)
+    - Zero/NaN : Sem formatação
+    """
+    import pandas as pd
+
+    if pd.isna(val):
+        return ""
+    if val > 0:
+        return "background-color: #c8e6c9; color: #1b5e20"
+    elif val < 0:
+        return "background-color: #ffcdd2; color: #b71c1c"
+    return ""

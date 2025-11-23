@@ -118,14 +118,23 @@ def preparar_dados_grafico_piramide_etaria(
 
 
 def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
-    # Dentro das abas, os widgets de selectbox ou radio podem disparar o callback
-    # para garantir que o expander permaneça aberto.
+    # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
+    key_main_tab = "main_tab_nav_demografia"
+    if key_main_tab not in st.session_state:
+        st.session_state[key_main_tab] = "População Estimada"
 
-    tab_populacao, tab_sexo, tab_densidade = st.tabs(
-        ["População Estimada", "Sexo", "Densidade Demográfica"]
+    aba_selecionada = st.pills(
+        "Selecione o indicador:",
+        options=["População Estimada", "Sexo", "Densidade Demográfica"],
+        selection_mode="single",
+        key=key_main_tab,
     )
 
-    with tab_populacao:
+    if not aba_selecionada:
+        aba_selecionada = "População Estimada"
+
+    # --- ABA 1: POPULAÇÃO ESTIMADA ---
+    if aba_selecionada == "População Estimada":
         titulo_centralizado("População Estimada", 5)
 
         df_populacao_estimada = preparar_dados_graficos_populacao_densidade(
@@ -145,7 +154,8 @@ def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
             fig, use_container_width=True
         )  # Ajustado para usar use_container_width=True
 
-    with tab_sexo:
+    # --- ABA 2: SEXO ---
+    elif aba_selecionada == "Sexo":
         CORES_SEXO = {"Masculino": "#4C82F7", "Feminino": "#FF6BE1"}
 
         anos_disponiveis = sorted(
@@ -179,7 +189,8 @@ def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
         )
         st.plotly_chart(fig_sexo, use_container_width=True)
 
-    with tab_densidade:
+    # --- ABA 3: DENSIDADE DEMOGRÁFICA ---
+    elif aba_selecionada == "Densidade Demográfica":
         titulo_centralizado("Densidade Demográfica", 5)
 
         df_densidade_demografica = preparar_dados_graficos_populacao_densidade(

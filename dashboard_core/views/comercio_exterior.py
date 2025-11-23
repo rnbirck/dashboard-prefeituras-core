@@ -10,9 +10,8 @@ from dashboard_core.utils import (
     checar_ult_ano_completo,
     filtrar_municipio_ult_mes_ano,
     criar_grafico_barras,
-    destacar_percentuais,
-    criar_tabela_comex,
     titulo_centralizado,
+    style_saldo_variacao,
 )
 
 municipio_de_interesse = None
@@ -21,11 +20,6 @@ anos_de_interesse = []
 
 
 def set_comercio_exterior_config(municipio, cores_municipios, anos_interesse):
-    """
-    Configura valores específicos do município que antes eram importados
-    do dashboard_core.config. Deve ser chamado pelo app.py antes de
-    renderizar a página de comercio_exterior.
-    """
     global municipio_de_interesse, CORES_MUNICIPIOS, anos_de_interesse
     municipio_de_interesse = municipio
     CORES_MUNICIPIOS = cores_municipios or {}
@@ -34,13 +28,27 @@ def set_comercio_exterior_config(municipio, cores_municipios, anos_interesse):
 
 # --- FUNÇÕES DE CALLBACK ---
 def set_comex_municipios_open():
-    """Define o estado do expander Comércio Exterior por Município como True."""
     st.session_state.comex_municipios_expander = True
 
 
 def set_comex_produto_pais_open():
-    """Define o estado do expander Comércio Exterior por Destino e Produto como True."""
     st.session_state.comex_produto_pais_expander = True
+
+
+# --- FORMATADORES ---
+def formatar_valor_br(x):
+    """Formata número float para padrão BR (1.000.000) sem decimais para valores altos."""
+    if pd.isna(x):
+        return "-"
+    return f"{x:,.0f}".replace(",", ".")
+
+
+def formatar_pct_br(x):
+    """Formata número float para percentual BR (+1.234,5%) com 1 casa decimal."""
+    if pd.isna(x):
+        return "-"
+    # Formata como +1,234.5% e depois inverte pontuação
+    return f"{x:+,.1f}%".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 # ==============================================================================
@@ -49,29 +57,18 @@ def set_comex_produto_pais_open():
 
 
 def display_comex_kpi_cards(df_ano, df_mes, municipio_interesse):
-    """Exibe os cards de KPI de Comércio Exterior para um município específico."""
-
     titulo_centralizado(f"Exportações de {municipio_de_interesse} (Milhões de US$)", 3)
     with st.container(border=False):
         # Ultimo mês disponível
         ult_ano = df_mes["ano"].max()
         ult_mes = df_mes[df_mes["ano"] == ult_ano]["mes"].max()
-        exp_mun_ult_mes = filtrar_municipio_ult_mes_ano(df_mes, municipio_interesse)[
-            "total_exp_mensal"
-        ].sum()
 
-        taxa_var_ult_mes = filtrar_municipio_ult_mes_ano(df_mes, municipio_interesse)[
-            "perc_var_mes_ano_anterior"
-        ].sum()
+        df_kpi_mes = filtrar_municipio_ult_mes_ano(df_mes, municipio_interesse)
 
-        # Acumulado no ano
-        exp_mun_acu_ano = filtrar_municipio_ult_mes_ano(df_mes, municipio_interesse)[
-            "total_exp_acumulado"
-        ].sum()
-
-        taxa_var_acu_ano = filtrar_municipio_ult_mes_ano(df_mes, municipio_interesse)[
-            "perc_var_acum_ano_anterior"
-        ].sum()
+        exp_mun_ult_mes = df_kpi_mes["total_exp_mensal"].sum()
+        taxa_var_ult_mes = df_kpi_mes["perc_var_mes_ano_anterior"].sum()
+        exp_mun_acu_ano = df_kpi_mes["total_exp_acumulado"].sum()
+        taxa_var_acu_ano = df_kpi_mes["perc_var_acum_ano_anterior"].sum()
 
         # Último ano completo
         ano_completo = checar_ult_ano_completo(df_mes)
@@ -81,7 +78,6 @@ def display_comex_kpi_cards(df_ano, df_mes, municipio_interesse):
         ]
 
         exp_mun_ano_completo = df_ano_filtrado["total_exp_anual"].sum()
-
         tx_var_ano_completo = df_ano_filtrado["perc_var_ano_anterior"].sum()
 
         col1, col2, col3 = st.columns(3)
@@ -111,109 +107,104 @@ def display_comex_kpi_cards(df_ano, df_mes, municipio_interesse):
 
 
 @st.cache_data
-def prepara_dados_graficos_comex(df_filtrado, anos_de_interesse):
+def preparar_dados_grafico_comex(df_mensal, df_anual, anos_de_interesse):
     """
-    Recebe um DataFrame de comex filtrado e retorna todos os DataFrames pivotados
-    e o último ano/mês para os títulos dos gráficos.
+    Recebe os DataFrames MENSAL e ANUAL filtrados e retorna os pivots.
     """
+    if df_mensal.empty:
+        return tuple([pd.DataFrame()] * 8) + (None, None)
 
-    ult_ano_comex, ult_mes_comex = None, None
-    df_comex_hist, df_comex_hist_perc, df_comex_acum, df_comex_ano = (
-        pd.DataFrame(),
-        pd.DataFrame(),
-        pd.DataFrame(),
-        pd.DataFrame(),
+    # Pré-processamento MENSAL
+    ult_ano = df_mensal["ano"].max()
+    ult_mes = df_mensal[df_mensal["ano"] == ult_ano]["mes"].max()
+
+    df_proc_mensal = df_mensal.assign(
+        date=lambda x: pd.to_datetime(dict(year=x.ano, month=x.mes, day=1)),
+        exp_milhoes=lambda x: x["total_exp_mensal"] / 1_000_000,
+        exp_acum_milhoes=lambda x: x["total_exp_acumulado"] / 1_000_000,
     )
 
-    if not df_filtrado.empty:
-        ult_ano_comex = df_filtrado["ano"].max()
-        ult_mes_comex = df_filtrado[df_filtrado["ano"] == ult_ano_comex]["mes"].max()
+    # --- 1. Histórico Mensal (Evolução) ---
+    pivot_hist = df_proc_mensal.pivot_table(
+        index="date",
+        columns="municipio",
+        values=["exp_milhoes", "perc_var_mes_ano_anterior"],
+        aggfunc="sum",
+        fill_value=0,
+    ).sort_index()
 
-        # Histórico Mensal - Valor
-        df_comex_hist = (
-            df_filtrado.assign(
-                date=lambda x: pd.to_datetime(
-                    x["ano"].astype(str)
-                    + "-"
-                    + x["mes"].astype(str).str.zfill(2)
-                    + "-01"
-                ),
-                exp_milhoes=lambda x: x["total_exp_mensal"] / 1_000_000,
-            )
-            .pivot_table(
-                index="date",
-                columns="municipio",
-                values="exp_milhoes",
-                aggfunc="sum",
-                fill_value=0,
-            )
-            .sort_index()
-            .apply(lambda x: x.round(2))
-        )
-        # Historico Mensal - Percentual
-        df_comex_hist_perc = (
-            df_filtrado.assign(
-                date=lambda x: pd.to_datetime(
-                    x["ano"].astype(str)
-                    + "-"
-                    + x["mes"].astype(str).str.zfill(2)
-                    + "-01"
-                ),
-            )
-            .pivot_table(
-                index="date",
-                columns="municipio",
-                values="perc_var_mes_ano_anterior",
-                aggfunc="sum",
-                fill_value=0,
-            )
-            .sort_index()
-            .apply(lambda x: x.round(2))
-        )
+    df_comex_hist = pivot_hist["exp_milhoes"].apply(lambda x: x.round(2))
+    df_comex_hist_perc = pivot_hist["perc_var_mes_ano_anterior"].apply(
+        lambda x: x.round(2)
+    )
 
-        # Acumulado no Ano
-        df_comex_acum = (
-            df_filtrado[df_filtrado["mes"] <= ult_mes_comex]
-            .assign(exp_milhoes=lambda x: x["total_exp_acumulado"] / 1_000_000)
-            .pivot_table(
-                index="ano",
-                columns="municipio",
-                values="exp_milhoes",
-                aggfunc="sum",
-                fill_value=0,
-            )
-            .sort_index()
-        )
+    # --- 2. Mês Atual (Comparativo) ---
+    df_mes_atual = df_proc_mensal[df_proc_mensal["mes"] == ult_mes]
+    pivot_mes = df_mes_atual.pivot_table(
+        index="ano",
+        columns="municipio",
+        values=["exp_milhoes", "perc_var_mes_ano_anterior"],
+        aggfunc="sum",
+        fill_value=0,
+    ).sort_index()
 
-        # Anual
-        ano_completo_comex = checar_ult_ano_completo(df_filtrado)
-        df_comex_ano = (
-            df_filtrado[df_filtrado["ano"] <= ano_completo_comex]
-            .assign(exp_milhoes=lambda x: x["total_exp_mensal"] / 1_000_000)
-            .pivot_table(
-                index="ano",
-                columns="municipio",
-                values="exp_milhoes",
-                aggfunc="sum",
-                fill_value=0,
-            )
-            .sort_index()
-        )
+    df_comex_mes = pivot_mes["exp_milhoes"]
+    df_comex_mes_perc = pivot_mes["perc_var_mes_ano_anterior"]
+
+    # --- 3. Acumulado no Ano ---
+    df_acum_correto = df_proc_mensal[df_proc_mensal["mes"] == ult_mes]
+
+    pivot_acum = df_acum_correto.pivot_table(
+        index="ano",
+        columns="municipio",
+        values=["exp_acum_milhoes", "perc_var_acum_ano_anterior"],
+        aggfunc="sum",
+        fill_value=0,
+    ).sort_index()
+
+    df_comex_acum = pivot_acum["exp_acum_milhoes"]
+    df_comex_acum_perc = pivot_acum["perc_var_acum_ano_anterior"]
+
+    # --- 4. Anual ---
+    ano_completo = checar_ult_ano_completo(df_mensal)
+
+    if not df_anual.empty:
+        df_ano_proc = df_anual[
+            (df_anual["ano"].isin(anos_de_interesse))
+            & (df_anual["ano"] <= ano_completo)
+        ].assign(exp_milhoes=lambda x: x["total_exp_anual"] / 1_000_000)
+
+        pivot_ano = df_ano_proc.pivot_table(
+            index="ano",
+            columns="municipio",
+            values=["exp_milhoes", "perc_var_ano_anterior"],
+            aggfunc="sum",
+            fill_value=0,
+        ).sort_index()
+
+        df_comex_ano = pivot_ano["exp_milhoes"]
+        df_comex_ano_perc = pivot_ano["perc_var_ano_anterior"]
+    else:
+        df_comex_ano = pd.DataFrame()
+        df_comex_ano_perc = pd.DataFrame()
 
     return (
         df_comex_hist,
         df_comex_hist_perc,
+        df_comex_mes,
+        df_comex_mes_perc,
         df_comex_acum,
+        df_comex_acum_perc,
         df_comex_ano,
-        ult_ano_comex,
-        ult_mes_comex,
+        df_comex_ano_perc,
+        ult_ano,
+        ult_mes,
     )
 
 
-def display_comex_municipios_expander(df_mes):
+def display_comex_municipios_expander(df_mes, df_ano):
     """Exibe o expander com análise de exportações para múltiplos municípios."""
 
-    # Gerencia o estado do expander
     if "comex_municipios_expander" not in st.session_state:
         st.session_state.comex_municipios_expander = False
 
@@ -221,198 +212,377 @@ def display_comex_municipios_expander(df_mes):
         "Comércio Exterior por Município",
         expanded=st.session_state.comex_municipios_expander,
     ):
-        # Filtra DF base
-        df_filtrado = df_mes[(df_mes["ano"].isin(anos_de_interesse))]
+        df_mes_filtrado = df_mes[(df_mes["ano"].isin(anos_de_interesse))]
 
         (
             df_comex_hist,
             df_comex_hist_perc,
+            df_comex_mes,
+            df_comex_mes_perc,
             df_comex_acum,
+            df_comex_acum_perc,
             df_comex_ano,
+            df_comex_ano_perc,
             ult_ano_comex,
             ult_mes_comex,
-        ) = prepara_dados_graficos_comex(df_filtrado, anos_de_interesse)
+        ) = preparar_dados_grafico_comex(df_mes_filtrado, df_ano, anos_de_interesse)
 
-        anos_disponiveis = sorted(df_filtrado["ano"].unique().tolist(), reverse=True)
-
-        # Cria as abas. Nenhuma interação dentro das abas precisa de callback
-        # para abrir o expander, pois a interação principal é o selectbox
-        tab_hist, tab_acum, tab_anual = st.tabs(
-            ["Histórico Mensal", "Acumulado no Ano", "Anual"],
+        anos_disponiveis = sorted(
+            df_mes_filtrado["ano"].unique().tolist(), reverse=True
         )
 
-        with tab_hist:
+        # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
+        key_main_tab_comex = "main_tab_nav_comex_municipios"
+        if key_main_tab_comex not in st.session_state:
+            st.session_state[key_main_tab_comex] = "Evolução Mensal"
+
+        aba_selecionada_comex = st.pills(
+            "Selecione o tipo de análise temporal:",
+            options=["Evolução Mensal", "Mês", "Acumulado no Ano", "Anual"],
+            selection_mode="single",
+            key=key_main_tab_comex,
+        )
+
+        if not aba_selecionada_comex:
+            aba_selecionada_comex = "Evolução Mensal"
+
+        # --- ABA 1: EVOLUÇÃO MENSAL ---
+        if aba_selecionada_comex == "Evolução Mensal":
             col1, col2 = st.columns([0.5, 0.5])
             with col1:
                 ANO_SELECIONADO = st.selectbox(
-                    "Selecione o ano para o gráfico:",
+                    "Selecione o ano:",
                     options=anos_disponiveis,
                     index=0,
                     key="hist_ano_comex",
                     on_change=set_comex_municipios_open,
                 )
-
-            df_comex_hist_filtrado_ano = df_comex_hist[
-                df_comex_hist.index.year == ANO_SELECIONADO
-            ]
-
-            if not df_comex_hist_filtrado_ano.empty:
-                df_comex_hist_filtrado_ano.index = [
-                    f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
-                    for date in df_comex_hist_filtrado_ano.index
-                ]
-
-            df_comex_hist_perc_filtrado_ano = df_comex_hist_perc[
-                df_comex_hist_perc.index.year == ANO_SELECIONADO
-            ]
-
-            if not df_comex_hist_perc_filtrado_ano.empty:
-                df_comex_hist_perc_filtrado_ano.index = [
-                    f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
-                    for date in df_comex_hist_perc_filtrado_ano.index
-                ]
-
-            if not ANO_SELECIONADO:
-                st.warning("Por favor, selecione ao menos um ano.")
-
-            # Crie os gráficos antes do rádio
-            fig_hist = criar_grafico_barras(
-                df=df_comex_hist_filtrado_ano,
-                titulo="",
-                label_y="(Milhões de US$)",
-                barmode="group",
-                height=400,
-                data_label_format=",.1f",
-                hover_label_format=",.2f",
-                color_map=CORES_MUNICIPIOS,
-            )
-
-            fig_hist_perc = criar_grafico_barras(
-                df=df_comex_hist_perc_filtrado_ano,
-                titulo="",
-                label_y="Variação em relação ao mesmo mês do ano anterior (%)",
-                barmode="group",
-                height=400,
-                data_label_format=",.1f",
-                hover_label_format=",.2f",
-                color_map=CORES_MUNICIPIOS,
-            )
-
             with col2:
-                view_mode = st.radio(
-                    "Selecione o modo de Visualização:",
-                    options=["Valor (Milhões de US$)", "Variação Anual (%)"],
-                    horizontal=True,
-                    key="view_mode_comex_municipios_hist",
+                # Inicialização Segura
+                if "metric_mode_comex_hist" not in st.session_state:
+                    st.session_state.metric_mode_comex_hist = "Valor (Milhões US$)"
+
+                metric_mode_hist = st.segmented_control(
+                    "Métrica:",
+                    options=["Valor (Milhões US$)", "Variação (%)"],
+                    key="metric_mode_comex_hist",
+                    selection_mode="single",
                     on_change=set_comex_municipios_open,
                 )
+                if not metric_mode_hist:
+                    metric_mode_hist = "Valor (Milhões US$)"
 
-            if view_mode == "Valor (Milhões de US$)":
-                titulo_centralizado(f"Exportações em {ANO_SELECIONADO}", 5)
-                st.plotly_chart(fig_hist, use_container_width=True)
+            if metric_mode_hist == "Valor (Milhões US$)":
+                df_plot = df_comex_hist
+                label_y = "(Milhões de US$)"
+                titulo = f"Evolução das Exportações dos Municípios em {ANO_SELECIONADO}"
+                fmt = ",.1f"
+            else:
+                df_plot = df_comex_hist_perc
+                label_y = "Variação frente mesmo período do ano anterior (%)"
+                titulo = f"Variação Mensal das Exportações dos Municípios em {ANO_SELECIONADO}"
+                fmt = ",.1f"
 
-            elif view_mode == "Variação Anual (%)":
-                if fig_hist_perc:
-                    titulo_centralizado(
-                        f"Variação Percentual Anual das Exportações em {ANO_SELECIONADO}",
-                        5,
-                    )
+            df_plot = df_plot[df_plot.index.year == ANO_SELECIONADO].copy()
 
-                    st.plotly_chart(fig_hist_perc, use_container_width=True)
-                else:
-                    st.warning("Nenhum dado disponível para o gráfico.")
+            if not df_plot.empty:
+                df_plot.index = [
+                    f"{MESES_DIC[d.month][:3]}/{str(d.year)[2:]}" for d in df_plot.index
+                ]
+                titulo_centralizado(titulo, 5)
+                fig = criar_grafico_barras(
+                    df=df_plot,
+                    titulo="",
+                    label_y=label_y,
+                    barmode="group",
+                    height=400,
+                    data_label_format=fmt,
+                    hover_label_format=",.2f",
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, width="stretch")
+            else:
+                st.warning("Sem dados para o ano selecionado.")
 
-        with tab_acum:
-            df_comex_acum.index = (
+        # --- ABA 2: MÊS (Comparativo Anual) ---
+        elif aba_selecionada_comex == "Mês":
+            col1_m, _ = st.columns([0.5, 0.5])
+            with col1_m:
+                # Inicialização Segura
+                if "metric_mode_comex_mes" not in st.session_state:
+                    st.session_state.metric_mode_comex_mes = "Valor (Milhões US$)"
+
+                metric_mode_mes = st.segmented_control(
+                    "Métrica:",
+                    options=["Valor (Milhões US$)", "Variação (%)"],
+                    key="metric_mode_comex_mes",
+                    selection_mode="single",
+                    on_change=set_comex_municipios_open,
+                )
+                if not metric_mode_mes:
+                    metric_mode_mes = "Valor (Milhões US$)"
+
+            if metric_mode_mes == "Valor (Milhões US$)":
+                df_plot = df_comex_mes
+                label_y = "(Milhões de US$)"
+                titulo = f"Exportações dos Municípios em {MESES_DIC[ult_mes_comex]}"
+            else:
+                df_plot = df_comex_mes_perc
+                label_y = "Variação frente mesmo período do ano anterior (%)"
+                titulo = f"Variação das Exportações dos Municípios em {MESES_DIC[ult_mes_comex]}"
+
+            df_plot.index = (
+                MESES_DIC[ult_mes_comex][:3]
+                + "/"
+                + df_plot.index.astype(str).str.slice(-2)
+            )
+
+            titulo_centralizado(titulo, 5)
+            fig_mes = criar_grafico_barras(
+                df=df_plot,
+                titulo="",
+                label_y=label_y,
+                barmode="group",
+                height=400,
+                data_label_format=",.1f",
+                hover_label_format=",.2f",
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig_mes, width="stretch")
+
+        # --- ABA 3: ACUMULADO NO ANO ---
+        elif aba_selecionada_comex == "Acumulado no Ano":
+            col1_a, _ = st.columns([0.5, 0.5])
+            with col1_a:
+                # Inicialização Segura
+                if "metric_mode_comex_acum" not in st.session_state:
+                    st.session_state.metric_mode_comex_acum = "Valor (Milhões US$)"
+
+                metric_mode_acum = st.segmented_control(
+                    "Métrica:",
+                    options=["Valor (Milhões US$)", "Variação (%)"],
+                    key="metric_mode_comex_acum",
+                    selection_mode="single",
+                    on_change=set_comex_municipios_open,
+                )
+                if not metric_mode_acum:
+                    metric_mode_acum = "Valor (Milhões US$)"
+
+            if metric_mode_acum == "Valor (Milhões US$)":
+                df_plot = df_comex_acum.copy()
+                label_y = "(Milhões de US$)"
+                titulo = f"Exportações Acumuladas dos Municípios de Janeiro a {MESES_DIC[ult_mes_comex]}"
+            else:
+                df_plot = df_comex_acum_perc.copy()
+                label_y = "Variação frente mesmo período do ano anterior (%)"
+                titulo = f"Variação Acumulada das Exportações dos Municípios até {MESES_DIC[ult_mes_comex]}"
+
+            df_plot.index = (
                 "Jan-"
                 + MESES_DIC[ult_mes_comex][:3]
                 + "/"
-                + df_comex_acum.index.astype(str).str.slice(-2)
+                + df_plot.index.astype(str).str.slice(-2)
             )
-            fig_acum = criar_grafico_barras(
-                df=df_comex_acum,
-                titulo="",
-                label_y="(Milhões de US$)",
-                barmode="group",
-                height=400,
-                data_label_format=",.1f",
-                hover_label_format=",.2f",
-                color_map=CORES_MUNICIPIOS,
-            )
-            titulo_centralizado(
-                f"Exportações de Janeiro a {MESES_DIC[ult_mes_comex]}", 5
-            )
-            st.plotly_chart(fig_acum, use_container_width=True)
 
-        with tab_anual:
-            fig_anual = criar_grafico_barras(
-                df=df_comex_ano,
+            titulo_centralizado(titulo, 5)
+            fig_acum = criar_grafico_barras(
+                df=df_plot,
                 titulo="",
-                label_y="(Milhões de US$)",
+                label_y=label_y,
                 barmode="group",
                 height=400,
                 data_label_format=",.1f",
                 hover_label_format=",.2f",
                 color_map=CORES_MUNICIPIOS,
             )
-            titulo_centralizado("Exportações Anuais", 5)
-            st.plotly_chart(fig_anual, use_container_width=True)
+            st.plotly_chart(fig_acum, width="stretch")
+
+        # --- ABA 4: ANUAL ---
+        elif aba_selecionada_comex == "Anual":
+            col1_an, _ = st.columns([0.5, 0.5])
+            with col1_an:
+                # Inicialização Segura
+                if "metric_mode_comex_anual" not in st.session_state:
+                    st.session_state.metric_mode_comex_anual = "Valor (Milhões US$)"
+
+                metric_mode_anual = st.segmented_control(
+                    "Métrica:",
+                    options=["Valor (Milhões US$)", "Variação (%)"],
+                    key="metric_mode_comex_anual",
+                    selection_mode="single",
+                    on_change=set_comex_municipios_open,
+                )
+                if not metric_mode_anual:
+                    metric_mode_anual = "Valor (Milhões US$)"
+
+            if metric_mode_anual == "Valor (Milhões US$)":
+                df_plot = df_comex_ano
+                label_y = "(Milhões de US$)"
+                titulo = "Exportações Anuais dos Municípios"
+            else:
+                df_plot = df_comex_ano_perc
+                label_y = "Variação frente mesmo período do ano anterior (%)"
+                titulo = "Variação Anual das Exportações dos Municípios"
+
+            titulo_centralizado(titulo, 5)
+            fig_anual = criar_grafico_barras(
+                df=df_plot,
+                titulo="",
+                label_y=label_y,
+                barmode="group",
+                height=400,
+                data_label_format=",.1f",
+                hover_label_format=",.2f",
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig_anual, width="stretch")
 
 
 @st.cache_data
-def preparar_dados_comex_produto_pais(df, anos_selecionados, tipo_agg):
+def preparar_dados_comex_produto_pais_pivot(
+    df, tipo_agg, view_mode_tabela, metric_mode_tabela, anos_interesse_global
+):
     """
-    Função cacheada e genérica para preparar os dados para as abas de Comex.
-    'tipo_agg' pode ser 'pais', 'produto', ou 'pais_produto'.
+    Prepara e pivota os dados para a tabela dinâmica por País/Produto.
+    CORREÇÃO: Soma os valores absolutos antes de calcular a variação percentual
+    para evitar médias de porcentagens incorretas.
+    Renomeia índices para apresentação (País, Produto).
     """
-    if not anos_selecionados:
+    if df.empty:
         return pd.DataFrame()
 
-    df_filtrado = df[df["ano"].isin(anos_selecionados)]
+    # 1. Filtrar Dados pelos anos globais de interesse
+    df_filtrado = df[df["ano"].isin(anos_interesse_global)].copy()
 
+    if df_filtrado.empty:
+        return pd.DataFrame()
+
+    # --- LÓGICA DO MÊS DE REFERÊNCIA ---
+    ultimo_ano_dados = df_filtrado["ano"].max()
+    ult_mes_referencia = df_filtrado[df_filtrado["ano"] == ultimo_ano_dados][
+        "mes"
+    ].max()
+
+    # 2. Definir colunas de valor (Atual e Anterior) com base na visualização
+    if view_mode_tabela == "Anual":
+        # Filtra apenas mês 12
+        df_view = df_filtrado[df_filtrado["mes"] == 12].copy()
+        col_valor_atual = "valor_acumulado_ano"
+        col_valor_ant = "valor_acumulado_ano_anterior"
+        prefixo_col = "Ano"
+    else:
+        # Filtra pelo mês de referência para todos os anos
+        df_view = df_filtrado[df_filtrado["mes"] == ult_mes_referencia].copy()
+
+        if view_mode_tabela == "Mês":
+            col_valor_atual = "valor_exp_mensal"
+            col_valor_ant = "valor_exp_mensal_ano_anterior"
+            prefixo_col = f"{MESES_DIC[ult_mes_referencia]}"
+        else:  # Acumulado do Ano
+            col_valor_atual = "valor_acumulado_ano"
+            col_valor_ant = "valor_acumulado_ano_anterior"
+            prefixo_col = f"Jan-{MESES_DIC[ult_mes_referencia][:3]}"
+
+    if df_view.empty:
+        return pd.DataFrame()
+
+    # 3. Agrupar e Somar Valores Absolutos (Crucial para Variação correta)
+    # Definir colunas de agrupamento
     if tipo_agg == "pais":
-        return criar_tabela_comex(df_filtrado, ["pais"], ["País"], anos_selecionados)
+        cols_group = ["pais"]
+    elif tipo_agg == "produto":
+        cols_group = ["produto"]
+    else:  # pais_produto
+        cols_group = ["pais", "produto"]
 
-    if tipo_agg == "produto":
-        return criar_tabela_comex(
-            df_filtrado, ["produto"], ["Produto"], anos_selecionados
+    # Agrupa por (Categorias + Ano) e soma o valor atual E o valor do ano anterior
+    df_grouped = (
+        df_view.groupby(cols_group + ["ano"])[[col_valor_atual, col_valor_ant]]
+        .sum()
+        .reset_index()
+    )
+
+    # 4. Pivotar VALORES (Para exibir ou para ordenar)
+    pivot_valores = df_grouped.pivot_table(
+        index=cols_group,
+        columns="ano",
+        values=col_valor_atual,
+        aggfunc="sum",
+        fill_value=0,
+    )
+
+    # Ordenação (Sempre pelo maior valor do ano mais recente disponível)
+    if not pivot_valores.empty:
+        ultimo_ano_col = pivot_valores.columns.max()
+        pivot_valores = pivot_valores.sort_values(by=ultimo_ano_col, ascending=False)
+
+    # 5. Calcular o DataFrame Final
+    if metric_mode_tabela == "Valor (US$)":
+        df_final = pivot_valores
+    else:
+        # Calcular porcentagem baseada nas somas agrupadas
+        df_grouped["variacao_calc"] = (
+            (df_grouped[col_valor_atual] / df_grouped[col_valor_ant].replace(0, pd.NA))
+            - 1
+        ) * 100
+
+        # Pivotar a variação calculada
+        pivot_perc = df_grouped.pivot_table(
+            index=cols_group,
+            columns="ano",
+            values="variacao_calc",
+            aggfunc="max",  # Como já agrupamos antes, aqui é único
         )
 
-    if tipo_agg == "pais_produto":
-        return criar_tabela_comex(
-            df_filtrado, ["pais", "produto"], ["País", "Produto"], anos_selecionados
-        )
+        # Reindexar para manter a mesma ordem da tabela de valores (Maiores exportadores primeiro)
+        df_final = pivot_perc.reindex(pivot_valores.index)
 
-    return pd.DataFrame()
+    # 6. Renomear Colunas
+    if view_mode_tabela == "Anual":
+        df_final.columns = [str(ano) for ano in df_final.columns]
+    else:
+        # Formato: Jan-Nov/24 ou Nov/24
+        df_final.columns = [f"{prefixo_col}/{str(ano)[2:]}" for ano in df_final.columns]
+
+    # 7. Renomear Índices (País, Produto com maiúscula)
+    new_names = []
+    for name in df_final.index.names:
+        if name == "pais":
+            new_names.append("País")
+        elif name == "produto":
+            new_names.append("Produto")
+        else:
+            new_names.append(name)
+    df_final.index.names = new_names
+
+    return df_final
 
 
 @st.cache_data
-def preparar_grafico_comex(df_filtrado_exibicao):
+def preparar_grafico_comex_pais_produto(df_filtrado):
     """
-    Recebe o DataFrame já filtrado pela UI e retorna a figura do gráfico cacheada.
+    Gera gráfico de barras empilhadas para a aba de País/Produto
     """
-    if df_filtrado_exibicao.empty:
+    if df_filtrado.empty:
         return None
 
     df_grafico = (
-        df_filtrado_exibicao.assign(
-            date=lambda x: pd.to_datetime(
-                x["Ano"].astype(str) + "-" + x["Mês"].astype(str).str.zfill(2) + "-01"
-            )
+        df_filtrado.assign(
+            date=lambda x: pd.to_datetime(dict(year=x.ano, month=x.mes, day=1))
         )
         .pivot_table(
             index="date",
-            columns=["País"],
-            values="Valor Exportado no Mês (US$)",
+            columns="pais",
+            values="valor_exp_mensal",
             aggfunc="sum",
             fill_value=0,
         )
         .sort_index()
     )
+
     if not df_grafico.empty:
         df_grafico.index = [
-            f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
-            for date in df_grafico.index
+            f"{MESES_DIC[d.month][:3]}/{str(d.year)[2:]}" for d in df_grafico.index
         ]
 
     return criar_grafico_barras(
@@ -428,9 +598,6 @@ def preparar_grafico_comex(df_filtrado_exibicao):
 
 
 def display_comex_produto_pais_expander(df, municipio_interesse):
-    """Exibe o expander com análise de exportações por Produto e País do Municipio Selecionado."""
-
-    # Gerencia o estado do expander
     if "comex_produto_pais_expander" not in st.session_state:
         st.session_state.comex_produto_pais_expander = False
 
@@ -438,180 +605,216 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
         f"Comércio Exterior de {municipio_interesse} por Destino e Produto",
         expanded=st.session_state.comex_produto_pais_expander,
     ):
-        # Filtros no topo do expander (fora das abas)
-        anos_disponiveis = sorted(df["ano"].unique().tolist(), reverse=True)
+        # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
+        key_main_tab_produto = "main_tab_nav_comex_produto"
+        if key_main_tab_produto not in st.session_state:
+            st.session_state[key_main_tab_produto] = "País"
 
-        ANOS_SELECIONADOS = st.multiselect(
-            "Selecione o(s) ano(s) para a tabela:",
-            options=anos_disponiveis,
-            default=anos_de_interesse[-1],
-            key="anos_comex_pais_multiselect",
-            on_change=set_comex_produto_pais_open,
+        aba_selecionada_produto = st.pills(
+            "Selecione uma análise:",
+            options=["País", "Produto", "País - Produto"],
+            selection_mode="single",
+            key=key_main_tab_produto,
         )
 
-        if not ANOS_SELECIONADOS:
-            st.warning("Por favor, selecione ao menos um ano.")
-            # Retorna para evitar erro na próxima lógica
-            return
+        if not aba_selecionada_produto:
+            aba_selecionada_produto = "País"
 
-        # Abas
-        tab_pais, tab_produto, tab_pais_produto = st.tabs(
-            ["País", "Produto", "País - Produto"],
-        )
+        # --- ABA PAÍS ---
+        if aba_selecionada_produto == "País":
+            # Layout: Métrica e Visualização na linha de cima
+            col_view_p, col_metric_p = st.columns(2)
 
-        format_dict = {
-            "Valor Exportado no Mês (US$)": lambda x: f"{x:,.0f}".replace(",", "."),
-            "Valor Acumulado no Ano (US$)": lambda x: f"{x:,.0f}".replace(",", "."),
-            "Variação Mês (vs Ano Ant.) (%)": lambda x: f"{x:.1f}%".replace(".", ","),
-            "Variação Acum. (vs Ano Ant.) (%)": lambda x: f"{x:.1f}%".replace(".", ","),
-        }
+            with col_metric_p:
+                # Inicialização Segura
+                if "metric_mode_pais" not in st.session_state:
+                    st.session_state.metric_mode_pais = "Valor (US$)"
 
-        with tab_pais:
-            df_comex_pais = preparar_dados_comex_produto_pais(
-                df=df,
-                anos_selecionados=ANOS_SELECIONADOS,
-                tipo_agg="pais",
-            )
-
-            paises_options = sorted(df_comex_pais["País"].unique().tolist())
-
-            paises_selecionados_filtro = st.multiselect(
-                label="Filtrar a tabela por país (opcional):",
-                options=paises_options,
-                key="filtro_tabela_comex_pais",
-                on_change=set_comex_produto_pais_open,
-            )
-
-            df_comex_pais_exibir = (
-                df_comex_pais[df_comex_pais["País"].isin(paises_selecionados_filtro)]
-                if paises_selecionados_filtro
-                else df_comex_pais
-            )
-
-            st.dataframe(
-                df_comex_pais_exibir.style.map(
-                    destacar_percentuais,
-                    subset=[
-                        "Variação Mês (vs Ano Ant.) (%)",
-                        "Variação Acum. (vs Ano Ant.) (%)",
-                    ],
-                ).format(format_dict),
-                hide_index=True,
-                use_container_width=True,  # Ajustado para width="stretch"
-            )
-
-        with tab_produto:
-            df_comex_produto = preparar_dados_comex_produto_pais(
-                df=df, anos_selecionados=ANOS_SELECIONADOS, tipo_agg="produto"
-            )
-
-            produtos_options = sorted(df_comex_produto["Produto"].unique().tolist())
-
-            produtos_selecionados_filtro = st.multiselect(
-                label="Filtrar a tabela por produto (opcional):",
-                options=produtos_options,
-                key="filtro_tabela_comex_produto",
-                on_change=set_comex_produto_pais_open,
-            )
-            df_comex_produto_exibir = (
-                df_comex_produto[
-                    df_comex_produto["Produto"].isin(produtos_selecionados_filtro)
-                ]
-                if produtos_selecionados_filtro
-                else df_comex_produto
-            )
-
-            st.dataframe(
-                df_comex_produto_exibir.style.map(
-                    destacar_percentuais,
-                    subset=[
-                        "Variação Mês (vs Ano Ant.) (%)",
-                        "Variação Acum. (vs Ano Ant.) (%)",
-                    ],
-                ).format(format_dict),
-                hide_index=True,
-                use_container_width=True,  # Ajustado para width="stretch"
-            )
-
-        with tab_pais_produto:
-            df_comex_pais_produto = preparar_dados_comex_produto_pais(
-                df=df, anos_selecionados=ANOS_SELECIONADOS, tipo_agg="pais_produto"
-            )
-
-            paises_options = sorted(df_comex_pais_produto["País"].unique().tolist())
-            paises_default = (
-                df_comex_pais_produto.groupby(["País"], as_index=False)[
-                    "Valor Exportado no Mês (US$)"
-                ]
-                .sum()
-                .sort_values(by="Valor Exportado no Mês (US$)", ascending=False)
-                .head(3)["País"]
-                .tolist()
-            )
-
-            paises_selecionados = st.multiselect(
-                "Filtrar por País(es):",
-                options=paises_options,
-                default=paises_default,
-                key="filtro_pp_pais",
-                on_change=set_comex_produto_pais_open,
-            )
-
-            if paises_selecionados:
-                df_filtrado_temp = df_comex_pais_produto[
-                    df_comex_pais_produto["País"].isin(paises_selecionados)
-                ]
-                produtos_options = sorted(df_filtrado_temp["Produto"].unique().tolist())
-            else:
-                produtos_options = sorted(
-                    df_comex_pais_produto["Produto"].unique().tolist()
+                metric_mode_p = st.segmented_control(
+                    "Métrica:",
+                    options=["Valor (US$)", "Variação (%)"],
+                    key="metric_mode_pais",
+                    on_change=set_comex_produto_pais_open,
                 )
+                if not metric_mode_p:
+                    metric_mode_p = "Valor (US$)"
 
-            produtos_selecionados = st.multiselect(
-                "Filtrar por Produto:",
-                options=produtos_options,
-                default=produtos_options,
-                key="filtro_pp_produto",
-                on_change=set_comex_produto_pais_open,
+            with col_view_p:
+                # Inicialização Segura
+                if "view_mode_pais" not in st.session_state:
+                    st.session_state.view_mode_pais = "Mês"
+
+                view_mode_p = st.segmented_control(
+                    "Visualização:",
+                    options=["Mês", "Acumulado do Ano", "Anual"],
+                    key="view_mode_pais",
+                    on_change=set_comex_produto_pais_open,
+                )
+                if not view_mode_p:
+                    view_mode_p = "Mês"
+
+            # Busca na linha de baixo (full width)
+            texto_busca_pais = st.text_input(
+                "🔍 Pesquisar País:",
+                key="busca_pais",
+                placeholder="Ex: Estados Unidos, China",
             )
 
-            df_pais_produto_exibir = df_comex_pais_produto.copy()
-            if paises_selecionados:
-                df_pais_produto_exibir = df_pais_produto_exibir[
-                    df_pais_produto_exibir["País"].isin(paises_selecionados)
-                ]
-            if produtos_selecionados:
-                df_pais_produto_exibir = df_pais_produto_exibir[
-                    df_pais_produto_exibir["Produto"].isin(produtos_selecionados)
-                ]
-
-            styled_df = df_pais_produto_exibir.style.map(
-                destacar_percentuais,
-                subset=[
-                    "Variação Mês (vs Ano Ant.) (%)",
-                    "Variação Acum. (vs Ano Ant.) (%)",
-                ],
-            ).format(format_dict)
-
-            fig_pp = preparar_grafico_comex(df_pais_produto_exibir)
-
-            view_mode = st.radio(
-                "Selecione o modo de Visualização:",
-                options=["Tabela", "Gráfico"],
-                horizontal=True,
-                label_visibility="collapsed",
-                key="view_mode_comex_pp",
-                on_change=set_comex_produto_pais_open,
+            df_pivot_pais = preparar_dados_comex_produto_pais_pivot(
+                df, "pais", view_mode_p, metric_mode_p, anos_de_interesse
             )
 
-            if view_mode == "Tabela":
-                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            if not df_pivot_pais.empty:
+                if texto_busca_pais:
+                    df_pivot_pais = df_pivot_pais[
+                        df_pivot_pais.index.str.contains(
+                            texto_busca_pais, case=False, na=False
+                        )
+                    ]
 
-            elif view_mode == "Gráfico":
-                if fig_pp:
-                    st.plotly_chart(fig_pp, use_container_width=True)
+                styler = df_pivot_pais.style
+                if metric_mode_p == "Valor (US$)":
+                    styler = styler.format(formatar_valor_br)
+                    # Adiciona gradiente de cor (azul) para os valores
+                    styler = styler.background_gradient(cmap="Blues", axis=0)
                 else:
-                    st.warning("Nenhum dado disponível para o gráfico.")
+                    # CORREÇÃO AQUI: Usando o formatador customizado BR
+                    styler = styler.format(formatar_pct_br).map(style_saldo_variacao)
+
+                st.dataframe(styler, width="stretch")
+            else:
+                st.info("Sem dados para a seleção atual.")
+
+        # --- ABA PRODUTO ---
+        elif aba_selecionada_produto == "Produto":
+            # Layout: Métrica e Visualização
+            col_view_prod, col_metric_prod = st.columns(2)
+
+            with col_metric_prod:
+                # Inicialização Segura
+                if "metric_mode_prod" not in st.session_state:
+                    st.session_state.metric_mode_prod = "Valor (US$)"
+
+                metric_mode_prod = st.segmented_control(
+                    "Métrica:",
+                    options=["Valor (US$)", "Variação (%)"],
+                    key="metric_mode_prod",
+                    on_change=set_comex_produto_pais_open,
+                )
+                if not metric_mode_prod:
+                    metric_mode_prod = "Valor (US$)"
+
+            with col_view_prod:
+                # Inicialização Segura
+                if "view_mode_prod" not in st.session_state:
+                    st.session_state.view_mode_prod = "Mês"
+
+                view_mode_prod = st.segmented_control(
+                    "Visualização:",
+                    options=["Mês", "Acumulado do Ano", "Anual"],
+                    key="view_mode_prod",
+                    on_change=set_comex_produto_pais_open,
+                )
+                if not view_mode_prod:
+                    view_mode_prod = "Mês"
+
+            # Busca em baixo
+            texto_busca_prod = st.text_input(
+                "🔍 Pesquisar Produto:",
+                key="busca_prod",
+                placeholder="Ex: Calçados, Ferramentas",
+            )
+
+            df_pivot_prod = preparar_dados_comex_produto_pais_pivot(
+                df, "produto", view_mode_prod, metric_mode_prod, anos_de_interesse
+            )
+
+            if not df_pivot_prod.empty:
+                if texto_busca_prod:
+                    df_pivot_prod = df_pivot_prod[
+                        df_pivot_prod.index.str.contains(
+                            texto_busca_prod, case=False, na=False
+                        )
+                    ]
+
+                styler = df_pivot_prod.style
+                if metric_mode_prod == "Valor (US$)":
+                    styler = styler.format(formatar_valor_br)
+                    # Adiciona gradiente de cor (azul) para os valores
+                    styler = styler.background_gradient(cmap="Blues", axis=0)
+                else:
+                    # CORREÇÃO AQUI
+                    styler = styler.format(formatar_pct_br).map(style_saldo_variacao)
+
+                st.dataframe(styler, width="stretch")
+            else:
+                st.info("Sem dados para a seleção atual.")
+
+        # --- ABA PAÍS - PRODUTO ---
+        elif aba_selecionada_produto == "País - Produto":
+            # Layout: Métrica e Visualização
+            col_view_pp, col_metric_pp = st.columns(2)
+
+            with col_view_pp:
+                # Inicialização Segura
+                if "view_mode_pp" not in st.session_state:
+                    st.session_state.view_mode_pp = "Mês"
+
+                view_mode_pp = st.segmented_control(
+                    "Visualização:",
+                    options=["Mês", "Acumulado do Ano", "Anual"],
+                    key="view_mode_pp",
+                    on_change=set_comex_produto_pais_open,
+                )
+                if not view_mode_pp:
+                    view_mode_pp = "Mês"
+
+            with col_metric_pp:
+                # Inicialização Segura
+                if "metric_mode_pp" not in st.session_state:
+                    st.session_state.metric_mode_pp = "Valor (US$)"
+
+                metric_mode_pp = st.segmented_control(
+                    "Métrica:",
+                    options=["Valor (US$)", "Variação (%)"],
+                    key="metric_mode_pp",
+                    on_change=set_comex_produto_pais_open,
+                )
+                if not metric_mode_pp:
+                    metric_mode_pp = "Valor (US$)"
+
+            # Busca em baixo
+            texto_busca_pp = st.text_input(
+                "🔍 Pesquisar País ou Produto:",
+                key="busca_pp",
+                placeholder="Ex: Estados Unidos ou Calçados",
+            )
+
+            df_pivot_pp = preparar_dados_comex_produto_pais_pivot(
+                df, "pais_produto", view_mode_pp, metric_mode_pp, anos_de_interesse
+            )
+
+            if not df_pivot_pp.empty:
+                if texto_busca_pp:
+                    idx_as_str = df_pivot_pp.index.map(
+                        lambda x: " ".join(str(v) for v in x)
+                    )
+                    df_pivot_pp = df_pivot_pp[
+                        idx_as_str.str.contains(texto_busca_pp, case=False, na=False)
+                    ]
+
+                styler = df_pivot_pp.style
+                if metric_mode_pp == "Valor (US$)":
+                    styler = styler.format(formatar_valor_br)
+                    # Adiciona gradiente de cor (azul) para os valores
+                    styler = styler.background_gradient(cmap="Blues", axis=0)
+                else:
+                    # CORREÇÃO AQUI
+                    styler = styler.format(formatar_pct_br).map(style_saldo_variacao)
+
+                st.dataframe(styler, width="stretch")
+            else:
+                st.info("Sem dados para a seleção atual.")
 
 
 def show_page_comex(
@@ -623,7 +826,6 @@ def show_page_comex(
 ):
     """Função principal que renderiza a página de Comércio Exterior."""
 
-    # Inicialização dos estados dos expanders
     if "comex_municipios_expander" not in st.session_state:
         st.session_state.comex_municipios_expander = False
     if "comex_produto_pais_expander" not in st.session_state:
@@ -646,9 +848,7 @@ def show_page_comex(
     )
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
 
-    display_comex_municipios_expander(
-        df_mes=df_comex_mensal,
-    )
+    display_comex_municipios_expander(df_mes=df_comex_mensal, df_ano=df_comex_ano)
 
     display_comex_produto_pais_expander(
         df=df_comex_municipio_filtrado, municipio_interesse=municipio_foco

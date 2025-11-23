@@ -181,21 +181,111 @@ def show_page_home(
     col_a, col_b = st.columns(2, gap="large")
 
     # --- COLUNA A ---
-    # Ordem: Emprego, Empresas, Comércio Exterior, Segurança, Assistência Social
+    # Ordem Alfabética: Assistência Social, Comércio Exterior, Dados, Demografia, Educação
     with col_a:
         st.markdown(
             f"""
-            #### 💼 Emprego
-            Analisa o mercado de trabalho formal em três seções: **Saldo (CAGED)** (admissões/demissões mensais), **Estoque Estimado (CAGED+RAIS)** (estoque mensal) e **Vínculos/Renda (RAIS)** (dados anuais).
+            #### ❤️ Assistência Social
+            Apresenta informações sobre a população em vulnerabilidade social, com dados do **Cadastro Único (CadÚnico)** e do programa **Novo Bolsa Família**.
+            
+            *Frequência: **Mensal*** 
+            
+            *Últimos dados: **CadÚnico:** **{data_cad}** | **Novo Bolsa Família:** **{data_bolsa}***
+            """
+        )
+        st.button(
+            "Explorar Assistência Social ➔",
+            on_click=go_to_page,
+            args=("Assistência Social",),
+            key="btn_home_assistencia",
+        )
+        st.markdown("---")
+
+        st.markdown(
+            f"""
+            #### ✈️ Comércio Exterior
+            Apresenta os dados de exportação com base nos dados do **Comexstat**. É possível analisar os valores totais, os principais produtos exportados e os países de destino.
+            
+            *Frequência: **Mensal***
+            
+            *Últimos dados: **{data_comex}***
+            """
+        )
+        st.button(
+            "Explorar Comércio Exterior ➔",
+            on_click=go_to_page,
+            args=("Comércio Exterior",),
+            key="btn_home_comex",
+        )
+        st.markdown("---")
+
+        st.markdown(
+            """
+            #### 📥 Dados 
+            Página destinada ao download das bases utilizadas na construção do dashboard.
+            
+            *Frequência: Conforme atualização das fontes*
+            """
+        )
+        st.button(
+            "Explorar Dados ➔",
+            on_click=go_to_page,
+            args=("Dados",),
+            key="btn_home_dados",
+        )
+        st.markdown("---")
+
+        st.markdown(
+            f"""
+            #### 👨‍👩‍👧‍👦 Demografia
+            Análise da população estimada, densidade demográfica e estrutura etária (pirâmide etária) por sexo. Dados baseados nas estimativas populacionais do **IBGE**.
+            
+            *Frequência: **Anual***
+            
+            *Últimos dados: **População:** **{data_demografia_pop}** | **Faixa Etária/Sexo:** **{data_demografia_faixa}***
+            """
+        )
+        st.button(
+            "Explorar Demografia ➔",
+            on_click=go_to_page,
+            args=("Demografia",),
+            key="btn_home_demografia",
+        )
+        st.markdown("---")
+
+        st.markdown(
+            f"""
+            #### 🎓 Educação
+            Consolida indicadores educacionais do **Censo Escolar** e do **INEP (IDEB)**, incluindo matrículas, docentes, turmas, taxas de rendimento e notas de avaliação do SAEB.
+            
+            *Frequência: **Anual (Censo)** e **Bienal (IDEB)*** 
+            
+            *Últimos dados: **Censo:** **{data_matriculas}** | **IDEB:** **{data_ideb}***
+            """
+        )
+        st.button(
+            "Explorar Educação ➔",
+            on_click=go_to_page,
+            args=("Educação",),
+            key="btn_home_educacao",
+        )
+
+    # --- COLUNA B ---
+    # Ordem Alfabética: Emprego e Renda, Empresas, Finanças, PIB, Saúde, Segurança
+    with col_b:
+        st.markdown(
+            f"""
+            #### 💼 Emprego e Renda
+            Analisa o mercado de trabalho formal em três seções: **Saldo (CAGED)** (admissões/demissões mensais), **Estoque Estimado (CAGED+RAIS)** (estoque mensal) e ** Renda (RAIS)** (dados anuais).
                         
-            *Frequência: **Mensal (Saldo/Estoque)** e **Anual (Vínculos)***
+            *Frequência: **Mensal (Saldo/Estoque)** e **Anual (Renda)***
                         
             *Últimos dados: **Mensal:** **{data_emprego}** | **Anual (RAIS):** **{data_rais}*** """
         )
         st.button(
-            "Explorar Emprego ➔",
+            "Explorar Emprego e Renda ➔",
             on_click=go_to_page,
-            args=("Emprego",),
+            args=("Emprego e Renda",),
             key="btn_home_emprego",
         )
         st.markdown("---")
@@ -220,109 +310,19 @@ def show_page_home(
 
         st.markdown(
             f"""
-            #### ✈️ Comércio Exterior
-            Apresenta os dados de exportação com base nos dados do **Comexstat**. É possível analisar os valores totais, os principais produtos exportados e os países de destino.
+            #### 💰 Finanças Públicas
+            Apresenta dados fiscais do **SICONFI**, divididos em **Indicadores Financeiros Anuais** e **Indicadores de Execução Orçamentária Bimestrais**.
             
-            *Frequência: **Mensal***
+            *Frequência: **Anual** e **Bimestral***
             
-            *Últimos dados: **{data_comex}***
+            *Últimos dados: **Indicadores (Anual):** **{data_financas_anual}** | **Execução (Bimestral):** **{data_financas_bim}***
             """
         )
         st.button(
-            "Explorar Comércio Exterior ➔",
+            "Explorar Finanças ➔",
             on_click=go_to_page,
-            args=("Comércio Exterior",),
-            key="btn_home_comex",
-        )
-        st.markdown("---")
-
-        st.markdown(
-            f"""
-            #### 🛡️ Segurança Pública
-            Reúne os principais indicadores de criminalidade divulgados pela **SSP/RS**, com visualização em números absolutos e taxas por 10 mil habitantes.
-            
-            *Frequência: **Mensal*** 
-            
-            *Últimos dados: **{data_seguranca}***
-            """
-        )
-        st.button(
-            "Explorar Segurança ➔",
-            on_click=go_to_page,
-            args=("Segurança",),
-            key="btn_home_seguranca",
-        )
-        st.markdown("---")
-
-        st.markdown(
-            f"""
-            #### ❤️ Assistência Social
-            Apresenta informações sobre a população em vulnerabilidade social, com dados do **Cadastro Único (CadÚnico)** e do programa **Novo Bolsa Família**.
-            
-            *Frequência: **Mensal*** 
-            
-            *Últimos dados: **CadÚnico:** **{data_cad}** | **Novo Bolsa Família:** **{data_bolsa}***
-            """
-        )
-        st.button(
-            "Explorar Assistência Social ➔",
-            on_click=go_to_page,
-            args=("Assistência Social",),
-            key="btn_home_assistencia",
-        )
-        st.markdown("---")
-
-        st.markdown(
-            """
-            #### 📥 Dados 
-            Página destinada ao download das bases utilizadas na construção do dashboard.
-            
-            *Frequência: Conforme atualização das fontes*
-            """
-        )
-        st.button(
-            "Explorar Dados ➔",
-            on_click=go_to_page,
-            args=("Dados",),
-            key="btn_home_dados",
-        )
-
-    # --- COLUNA B ---
-    # Ordem: Educação, Saúde, PIB, Demografia, Finanças
-    with col_b:
-        st.markdown(
-            f"""
-            #### 🎓 Educação
-            Consolida indicadores educacionais do **Censo Escolar** e do **INEP (IDEB)**, incluindo matrículas, docentes, turmas, taxas de rendimento e notas de avaliação do SAEB.
-            
-            *Frequência: **Anual (Censo)** e **Bienal (IDEB)*** 
-            
-            *Últimos dados: **Censo:** **{data_matriculas}** | **IDEB:** **{data_ideb}***
-            """
-        )
-        st.button(
-            "Explorar Educação ➔",
-            on_click=go_to_page,
-            args=("Educação",),
-            key="btn_home_educacao",
-        )
-        st.markdown("---")
-
-        st.markdown(
-            f"""
-            #### 🏥 Saúde
-            Indicadores de saúde pública, incluindo nascimentos, óbitos, cobertura vacinal, leitos e despesas. Dados provenientes de fontes como a Secretaria de Saúde do RS, DATASUS e CNES.
-            
-            *Frequência: **Mensal** e **Anual*** 
-            
-            *Últimos dados: **{data_saude}***
-            """
-        )
-        st.button(
-            "Explorar Saúde ➔",
-            on_click=go_to_page,
-            args=("Saúde",),
-            key="btn_home_saude",
+            args=("Finanças",),
+            key="btn_home_financas",
         )
         st.markdown("---")
 
@@ -346,35 +346,35 @@ def show_page_home(
 
         st.markdown(
             f"""
-            #### 👨‍👩‍👧‍👦 Demografia
-            Análise da população estimada, densidade demográfica e estrutura etária (pirâmide etária) por sexo. Dados baseados nas estimativas populacionais do **IBGE**.
+            #### 🏥 Saúde
+            Indicadores de saúde pública, incluindo nascimentos, óbitos, cobertura vacinal, leitos e despesas. Dados provenientes de fontes como a Secretaria de Saúde do RS, DATASUS e CNES.
             
-            *Frequência: **Anual***
+            *Frequência: **Mensal** e **Anual*** 
             
-            *Últimos dados: **População:** **{data_demografia_pop}** | **Faixa Etária/Sexo:** **{data_demografia_faixa}***
+            *Últimos dados: **{data_saude}***
             """
         )
         st.button(
-            "Explorar Demografia ➔",
+            "Explorar Saúde ➔",
             on_click=go_to_page,
-            args=("Demografia",),
-            key="btn_home_demografia",
+            args=("Saúde",),
+            key="btn_home_saude",
         )
         st.markdown("---")
 
         st.markdown(
             f"""
-            #### 💰 Finanças Públicas
-            Apresenta dados fiscais do **SICONFI**, divididos em **Indicadores Financeiros Anuais** e **Indicadores de Execução Orçamentária Bimestrais**.
+            #### 🛡️ Segurança Pública
+            Reúne os principais indicadores de criminalidade divulgados pela **SSP/RS**, com visualização em números absolutos e taxas por 10 mil habitantes.
             
-            *Frequência: **Anual** e **Bimestral***
+            *Frequência: **Mensal*** 
             
-            *Últimos dados: **Indicadores (Anual):** **{data_financas_anual}** | **Execução (Bimestral):** **{data_financas_bim}***
+            *Últimos dados: **{data_seguranca}***
             """
         )
         st.button(
-            "Explorar Finanças ➔",
+            "Explorar Segurança ➔",
             on_click=go_to_page,
-            args=("Finanças",),
-            key="btn_home_financas",
+            args=("Segurança",),
+            key="btn_home_seguranca",
         )

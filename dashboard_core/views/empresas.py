@@ -8,6 +8,7 @@ from dashboard_core.utils import (
     filtrar_municipio_ult_mes_ano,
     criar_grafico_barras,
     preparar_dados_graficos_anuais,
+    style_saldo_variacao,
 )
 
 municipio_de_interesse = None
@@ -19,11 +20,6 @@ def set_empresas_config(municipio, cores_municipios, ordem):
     """
     Injeta a configuração específica do município para as views de empresas.
     Chamar no app.py antes de renderizar a página de empresas.
-
-    Parâmetros:
-      - municipio: str -> nome do município de interesse
-      - cores_municipios: dict -> mapa de cores por município
-      - ordem: list -> ordem customizada para o tamanho dos estabelecimentos
     """
     global municipio_de_interesse, CORES_MUNICIPIOS, ordem_tamanho_estabelecimentos
     municipio_de_interesse = municipio
@@ -51,7 +47,6 @@ def mei_callback():
 
 def estabelecimentos_callback():
     """Callback para manter o expander Estabelecimentos aberto."""
-    # Este callback será usado nos seletores internos da função display_estabelecimentos
     set_expander_open("estabelecimentos_expander_state")
 
 
@@ -107,101 +102,80 @@ def display_cnpj_kpi_cards(df_cnpj, df_mei, municipio_de_interesse):
 
 
 @st.cache_data
-def preparar_dados_grafico_empresas_ativas(df, df_cnae, df_cnae_saldo):
-    df_graf_total = pd.DataFrame()
-    df_graf_setor = pd.DataFrame()
-    df_tab_cnae = pd.DataFrame()
-    df_tab_cnae_saldo = pd.DataFrame()
+def preparar_dados_grafico_empresas_ativas(df, df_setor, df_cnae, df_cnae_saldo):
+    """
+    Prepara os dados base para os gráficos e tabelas.
+    Retorna DataFrames com coluna 'date' para facilitar filtragens dinâmicas.
+    Agora utiliza df_setor para as visões de Setor Econômico.
+    """
 
-    df_graf_total = (
-        df.assign(
-            date=lambda x: pd.to_datetime(
-                x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
+    def processar_df_base(dataframe, index_col, value_col):
+        # Verifica se a coluna existe
+        if value_col not in dataframe.columns:
+            return pd.DataFrame()
+
+        return (
+            dataframe.assign(
+                date=lambda x: pd.to_datetime(
+                    x["ano"].astype(str)
+                    + "-"
+                    + x["mes"].astype(str).str.zfill(2)
+                    + "-01"
+                )
             )
+            .pivot_table(
+                index="date",
+                columns=index_col,
+                values=value_col,
+                aggfunc="sum",
+                observed=False,
+                fill_value=0,
+            )
+            .sort_index()
         )
-        .pivot_table(
-            index="date",
-            columns="municipio",
-            values="empresas_ativas",
-            aggfunc="sum",
-            fill_value=0,
+
+    # 1. Dados Totais por Município (Date x Municipio)
+    df_graf_total = processar_df_base(df, "municipio", "empresas_ativas")
+
+    df_graf_total_yoy = processar_df_base(df, "municipio", "empresas_ativas_yoy")
+
+    # 2. Dados por Setor (Date x Grupo IBGE)
+    df_graf_setor = processar_df_base(df_setor, "grupo_ibge", "empresas_ativas")
+
+    # 2.1 Dados YoY Setor -
+    df_graf_setor_yoy = processar_df_base(df_setor, "grupo_ibge", "empresas_ativas_yoy")
+
+    # 3. Dados CNAE Estoque (Date x Grupo)
+    df_cnae_processed = df_cnae.assign(
+        date=lambda x: pd.to_datetime(
+            x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
         )
-        .sort_index()
+    )
+    df_cnae_saldo_processed = df_cnae_saldo.assign(
+        date=lambda x: pd.to_datetime(
+            x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
+        )
     )
 
-    df_graf_setor = (
-        df_cnae.assign(
-            date=lambda x: pd.to_datetime(
-                x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
-            )
-        )
-        .pivot_table(
-            index="date",
-            columns="grupo_ibge",
-            values="empresas_ativas",
-            aggfunc="sum",
-            fill_value=0,
-        )
-        .sort_index()
+    # Últimos dados para defaults
+    ult_ano = df["ano"].max()
+    ult_mes = df[df["ano"] == ult_ano]["mes"].max()
+
+    return (
+        df_graf_total,
+        df_graf_total_yoy,
+        df_graf_setor,
+        df_graf_setor_yoy,
+        df_cnae_processed,
+        df_cnae_saldo_processed,
+        ult_ano,
+        ult_mes,
     )
-
-    ult_ano = df_cnae["ano"].max()
-    ult_mes = df_cnae[df_cnae["ano"] == ult_ano]["mes"].max()
-    date_sort = pd.to_datetime(f"{ult_ano}-{ult_mes:02d}-01")
-
-    df_tab_cnae = (
-        df_cnae.assign(
-            date=lambda x: pd.to_datetime(
-                x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
-            )
-        )
-        .pivot_table(
-            index="grupo",
-            columns="date",
-            values="empresas_ativas",
-            aggfunc="sum",
-            fill_value=0,
-        )
-        .sort_values(by=date_sort, ascending=False)
-    )
-
-    novos_nomes_colunas = [
-        f"{MESES_DIC[data.month][:3]}/{str(data.year)[-2:]}"
-        for data in df_tab_cnae.columns
-    ]
-
-    df_tab_cnae.columns = novos_nomes_colunas
-    df_tab_cnae.index.name = "CNAE - Grupo"
-
-    df_tab_cnae_saldo = (
-        df_cnae_saldo.assign(
-            date=lambda x: pd.to_datetime(
-                x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
-            )
-        )
-        .pivot_table(
-            index="grupo",
-            columns="date",
-            values="saldo_empresas",
-            aggfunc="sum",
-            fill_value=0,
-        )
-        .sort_values(by=date_sort, ascending=False)
-    )
-
-    novos_nomes_colunas = [
-        f"{MESES_DIC[data.month][:3]}/{str(data.year)[-2:]}"
-        for data in df_tab_cnae_saldo.columns
-    ]
-
-    df_tab_cnae_saldo.columns = novos_nomes_colunas
-    df_tab_cnae_saldo.index.name = "CNAE - Grupo"
-
-    return df_graf_total, df_graf_setor, df_tab_cnae, df_tab_cnae_saldo
 
 
 def display_empresas_ativas_expander(
     df,
+    df_setor,
     df_cnae,
     df_cnae_saldo,
     titulo_expander,
@@ -217,136 +191,367 @@ def display_empresas_ativas_expander(
     with st.expander(
         f"{titulo_expander}", expanded=st.session_state[expander_state_key]
     ):
-        df_graf_total, df_graf_cnae, df_tab_cnae, df_tab_cnae_saldo = (
-            preparar_dados_grafico_empresas_ativas(
-                df=df, df_cnae=df_cnae, df_cnae_saldo=df_cnae_saldo
-            )
+        (
+            df_graf_total,
+            df_graf_total_yoy,
+            df_graf_setor,
+            df_graf_setor_yoy,
+            df_cnae_processed,
+            df_cnae_saldo_processed,
+            ult_ano,
+            ult_mes,
+        ) = preparar_dados_grafico_empresas_ativas(
+            df=df, df_setor=df_setor, df_cnae=df_cnae, df_cnae_saldo=df_cnae_saldo
         )
 
         anos_disponiveis = sorted(df["ano"].unique().tolist(), reverse=True)
-        col1, col2 = st.columns(2)
 
-        ANO_SELECIONADO = None
-
-        with col1:
-            if not anos_disponiveis:
-                st.warning("Nenhum dado disponível para os filtros selecionados.")
-            else:
-                # ADICIONADO CALLBACK
-                ANO_SELECIONADO = st.selectbox(
-                    "Selecione o ano para o gráfico:",
-                    options=anos_disponiveis,
-                    index=0,
-                    key=f"selecionar_ano_{key_prefix}",
-                    on_change=callback_func,
-                )
-
-        if ANO_SELECIONADO is None:
-            # Garante que o restante do código não execute se não houver dados
-            return
-
-        tab_total, tab_setor, tab_cnae = st.tabs(
-            [f"{titulo_expander} por Município", "Setor", "CNAE"]
+        # Navegação entre as análises
+        aba_selecionada = st.pills(
+            "Selecione o tipo de análise:",
+            [f"{titulo_expander} por Município", "Setor", "CNAE"],
+            selection_mode="single",
+            default=f"{titulo_expander} por Município",
+            key=f"main_tab_nav_{key_prefix}",
         )
+        if not aba_selecionada:
+            aba_selecionada = f"{titulo_expander} por Município"
 
-        # Filtros de data após selecionar o ano
-        df_graf_total_anos = df_graf_total[df_graf_total.index.year == ANO_SELECIONADO]
-        df_graf_total_anos.index = [
-            f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
-            for date in df_graf_total_anos.index
-        ]
-
-        df_graf_cnae_anos = df_graf_cnae[df_graf_cnae.index.year == ANO_SELECIONADO]
-        df_graf_cnae_anos.index = [
-            f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
-            for date in df_graf_cnae_anos.index
-        ]
-
-        with tab_total:
-            titulo_centralizado(
-                f"Quantidade de {titulo_expander} em {ANO_SELECIONADO}", 5
-            )
-            fig_total = criar_grafico_barras(
-                df=df_graf_total_anos,
-                titulo="",
-                label_y="Quantidade de Empresas Ativas",
-                barmode="group",
-                height=400,
-                data_label_format=",.0f",
-                hover_label_format=",.0f",
-                color_map=CORES_MUNICIPIOS,
-            )
-            st.plotly_chart(fig_total, use_container_width=True)
-
-        with tab_setor:
-            titulo_centralizado(
-                f"{titulo_expander} por Setor em {municipio_de_interesse} - {ANO_SELECIONADO}",
-                5,
-            )
-            fig_setor = criar_grafico_barras(
-                df=df_graf_cnae_anos,
-                titulo="",
-                label_y="Quantidade de Empresas Ativas",
-                barmode="stack",
-                height=400,
-                data_label_format=",.0f",
-                hover_label_format=",.0f",
-                color_map=CORES_MUNICIPIOS,
-            )
-            st.plotly_chart(fig_setor, use_container_width=True)
-
-        with tab_cnae:
-            # ADICIONADO CALLBACK
-            view_mode = st.radio(
-                "Selecione a Análise:",
-                options=["Estoque", "Saldo"],
-                horizontal=True,
-                label_visibility="collapsed",
-                key=f"view_mode_cnae_{key_prefix}",
-                on_change=callback_func,
-            )
-
-            if view_mode == "Estoque":
-                colunas_do_ano = [
-                    col
-                    for col in df_tab_cnae.columns
-                    if col.endswith(f"/{str(ANO_SELECIONADO)[-2:]}")
-                ]
-                df_tab_cnae_filtrada = df_tab_cnae[colunas_do_ano]
-
-                titulo_centralizado(
-                    f"Estoque de {titulo_expander} por CNAE em {municipio_de_interesse} - {ANO_SELECIONADO}",
-                    5,
+        # --- ABA 1: MUNICÍPIO ---
+        if aba_selecionada == f"{titulo_expander} por Município":
+            col1, col2 = st.columns([0.5, 0.5])
+            with col1:
+                view_mode_total = (
+                    st.segmented_control(
+                        "Visualização:",
+                        options=["Evolução", "Mês", "Anual"],
+                        selection_mode="single",
+                        default="Evolução",
+                        key=f"view_mode_total_{key_prefix}",
+                        on_change=callback_func,
+                    )
+                    or "Evolução"
                 )
 
-                tab_cnae = df_tab_cnae_filtrada.style.format(
-                    lambda x: f"{x:,.0f}".replace(",", ".")
-                ).background_gradient(cmap="GnBu")
-                st.dataframe(tab_cnae, use_container_width=True)
+            with col2:
+                if view_mode_total == "Evolução":
+                    ano_sel = st.selectbox(
+                        "Selecione o ano:",
+                        options=anos_disponiveis,
+                        index=0,
+                        key=f"ano_total_{key_prefix}",
+                        on_change=callback_func,
+                    )
+                    metric_mode_total = "Total"
+                else:
+                    # Seletor de Métrica para Mês e Anual
+                    metric_mode_total = (
+                        st.segmented_control(
+                            "Métrica:",
+                            options=["Total", "Variação (%)"],
+                            selection_mode="single",
+                            default="Total",
+                            key=f"metric_mode_total_{key_prefix}",
+                            on_change=callback_func,
+                        )
+                        or "Total"
+                    )
 
-            if view_mode == "Saldo":
-                colunas_do_ano = [
-                    col
-                    for col in df_tab_cnae_saldo.columns
-                    if col.endswith(f"/{str(ANO_SELECIONADO)[-2:]}")
+            # Seleção do DataFrame base e Formatação
+            if metric_mode_total == "Variação (%)":
+                df_base = df_graf_total_yoy
+                label_y = "Variação (%)"
+                fmt = ",.1f"
+            else:
+                df_base = df_graf_total
+                label_y = "Empresas Ativas"
+                fmt = ",.0f"
+
+            df_plot = pd.DataFrame()
+            titulo_grafico = ""
+
+            if view_mode_total == "Evolução":
+                df_plot = df_base[df_base.index.year == ano_sel].copy()
+                df_plot.index = [
+                    f"{MESES_DIC[d.month][:3]}/{str(d.year)[-2:]}"
+                    for d in df_plot.index
                 ]
-                df_tab_cnae_saldo_filtrada = df_tab_cnae_saldo[colunas_do_ano]
+                titulo_grafico = f"Evolução Mensal em {ano_sel}"
 
-                titulo_centralizado(
-                    f"Saldo de {titulo_expander} por CNAE em {municipio_de_interesse} - {ANO_SELECIONADO}",
-                    5,
+            elif view_mode_total == "Mês":
+                df_plot = df_base[df_base.index.month == ult_mes].copy()
+                df_plot.index = [
+                    f"{MESES_DIC[d.month][:3]}/{str(d.year)[-2:]}"
+                    for d in df_plot.index
+                ]
+                if metric_mode_total == "Variação (%)":
+                    titulo_grafico = (
+                        f"Variação em {MESES_DIC[ult_mes]} (vs Ano Anterior)"
+                    )
+                else:
+                    titulo_grafico = f"{titulo_expander} em {MESES_DIC[ult_mes]}"
+
+            elif view_mode_total == "Anual":
+                df_plot = df_base[df_base.index.month == 12].copy()
+                df_plot.index = df_plot.index.year.astype(str)
+                if metric_mode_total == "Variação (%)":
+                    titulo_grafico = "Variação Anual"
+                else:
+                    titulo_grafico = f"{titulo_expander} por Ano"
+
+            titulo_centralizado(titulo_grafico, 5)
+            if not df_plot.empty:
+                fig = criar_grafico_barras(
+                    df=df_plot,
+                    titulo="",
+                    label_y=label_y,
+                    barmode="group",
+                    height=400,
+                    data_label_format=fmt,
+                    hover_label_format=fmt,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, width="stretch")
+            else:
+                st.warning("Sem dados para a seleção.")
+
+        # --- ABA 2: SETOR ---
+        elif aba_selecionada == "Setor":
+            col1_s, col2_s = st.columns([0.5, 0.5])
+            with col1_s:
+                view_mode_setor = (
+                    st.segmented_control(
+                        "Visualização:",
+                        options=["Evolução", "Mês", "Anual"],
+                        selection_mode="single",
+                        default="Evolução",
+                        key=f"view_mode_setor_{key_prefix}",
+                        on_change=callback_func,
+                    )
+                    or "Evolução"
                 )
 
-                tab_cnae = df_tab_cnae_saldo_filtrada.style.format(
-                    lambda x: f"{x:,.0f}".replace(",", ".")
-                ).background_gradient(cmap="coolwarm_r", axis=0)
-                st.dataframe(tab_cnae, use_container_width=True)
+            with col2_s:
+                if view_mode_setor == "Evolução":
+                    ano_sel_setor = st.selectbox(
+                        "Selecione o ano:",
+                        options=anos_disponiveis,
+                        index=0,
+                        key=f"ano_setor_{key_prefix}",
+                        on_change=callback_func,
+                    )
+                    metric_mode_setor = "Total"
+                else:
+                    metric_mode_setor = (
+                        st.segmented_control(
+                            "Métrica:",
+                            options=["Total", "Variação (%)"],
+                            selection_mode="single",
+                            default="Total",
+                            key=f"metric_mode_setor_{key_prefix}",
+                            on_change=callback_func,
+                        )
+                        or "Total"
+                    )
+
+            # Seleção do DataFrame base SETOR
+            if metric_mode_setor == "Variação (%)":
+                df_base_setor = df_graf_setor_yoy
+                label_y_setor = "Variação (%)"
+                fmt_setor = ",.1f"
+            else:
+                df_base_setor = df_graf_setor
+                label_y_setor = "Empresas Ativas"
+                fmt_setor = ",.0f"
+
+            df_plot_setor = pd.DataFrame()
+            titulo_grafico_setor = ""
+
+            if view_mode_setor == "Evolução":
+                df_plot_setor = df_base_setor[
+                    df_base_setor.index.year == ano_sel_setor
+                ].copy()
+                df_plot_setor.index = [
+                    f"{MESES_DIC[d.month][:3]}/{str(d.year)[-2:]}"
+                    for d in df_plot_setor.index
+                ]
+                titulo_grafico_setor = f"Evolução por Setor em {ano_sel_setor}"
+
+            elif view_mode_setor == "Mês":
+                df_plot_setor = df_base_setor[
+                    df_base_setor.index.month == ult_mes
+                ].copy()
+                df_plot_setor.index = [
+                    f"{MESES_DIC[d.month][:3]}/{str(d.year)[-2:]}"
+                    for d in df_plot_setor.index
+                ]
+                if metric_mode_setor == "Variação (%)":
+                    titulo_grafico_setor = f"Variação em {MESES_DIC[ult_mes]} por Setor"
+                else:
+                    titulo_grafico_setor = (
+                        f"{titulo_expander} em {MESES_DIC[ult_mes]} por Setor"
+                    )
+
+            elif view_mode_setor == "Anual":
+                df_plot_setor = df_base_setor[df_base_setor.index.month == 12].copy()
+                df_plot_setor.index = df_plot_setor.index.year.astype(str)
+                if metric_mode_setor == "Variação (%)":
+                    titulo_grafico_setor = "Variação Anual por Setor"
+                else:
+                    titulo_grafico_setor = f"{titulo_expander} por Ano por Setor"
+
+            titulo_centralizado(titulo_grafico_setor, 5)
+            if not df_plot_setor.empty:
+                # Se for variação barras lado a lado para facilitar comparação
+                barmode = "group" if metric_mode_setor == "Variação (%)" else "stack"
+
+                fig_setor = criar_grafico_barras(
+                    df=df_plot_setor,
+                    titulo="",
+                    label_y=label_y_setor,
+                    barmode=barmode,
+                    height=400,
+                    data_label_format=fmt_setor,
+                    hover_label_format=fmt_setor,
+                    color_map=CORES_MUNICIPIOS
+                    if "municipio" in df_plot_setor.columns
+                    else None,
+                )
+                st.plotly_chart(fig_setor, width="stretch")
+            else:
+                st.warning("Sem dados para a seleção.")
+
+        # --- ABA 3: CNAE (TABELA) ---
+        elif aba_selecionada == "CNAE":
+            col1_c, col2_c = st.columns([0.5, 0.5])
+
+            with col2_c:
+                metric_mode_cnae = (
+                    st.segmented_control(
+                        "Métrica:",
+                        options=["Estoque", "Saldo"],
+                        selection_mode="single",
+                        default="Estoque",
+                        key=f"metric_cnae_{key_prefix}",
+                        on_change=callback_func,
+                    )
+                    or "Estoque"
+                )
+
+            with col1_c:
+                view_mode_cnae = (
+                    st.segmented_control(
+                        "Visualização:",
+                        options=["Mês", "Anual"],
+                        selection_mode="single",
+                        default="Mês",
+                        key=f"view_mode_cnae_{key_prefix}",
+                        on_change=callback_func,
+                    )
+                    or "Mês"
+                )
+
+            # 1. CALCULAR A ORDEM (BASEADA SEMPRE NO ESTOQUE)
+            if view_mode_cnae == "Mês":
+
+                def filter_condition(x):
+                    return x["date"].dt.month == ult_mes
+
+                titulo_sufixo = f"em {MESES_DIC[ult_mes]}"
+
+                def col_fmt(d):
+                    return f"{MESES_DIC[d.month][:3]}/{str(d.year)[-2:]}"
+
+            else:  # Anual
+
+                def filter_condition(x):
+                    return x["date"].dt.month == 12
+
+                titulo_sufixo = "por Ano"
+
+                def col_fmt(d):
+                    return str(d.year)
+
+            # Tabela Referência (Estoque) para ordenar
+            df_estoque_ref = df_cnae_processed[filter_condition(df_cnae_processed)]
+
+            ordenacao_fixa = []
+            if not df_estoque_ref.empty:
+                pivot_ref = df_estoque_ref.pivot_table(
+                    index="grupo",
+                    columns="date",
+                    values="empresas_ativas",
+                    aggfunc="sum",
+                    observed=False,
+                    fill_value=0,
+                )
+                last_col = pivot_ref.columns[-1]
+                ordenacao_fixa = pivot_ref.sort_values(
+                    by=last_col, ascending=False
+                ).index
+
+            # 2. PREPARAR DADOS DE EXIBIÇÃO
+            if metric_mode_cnae == "Estoque":
+                df_base = df_cnae_processed[filter_condition(df_cnae_processed)]
+                val_col = "empresas_ativas"
+                cmap = "GnBu"  # Azul para estoque
+                titulo_tabela = f"Estoque {titulo_sufixo} por CNAE"
+            else:
+                df_base = df_cnae_saldo_processed[
+                    filter_condition(df_cnae_saldo_processed)
+                ]
+                val_col = "saldo_empresas"
+                titulo_tabela = f"Saldo {titulo_sufixo} por CNAE"
+
+            if not df_base.empty:
+                df_pivot_final = df_base.pivot_table(
+                    index="grupo",
+                    columns="date",
+                    values=val_col,
+                    aggfunc="sum",
+                    observed=False,
+                    fill_value=0,
+                )
+
+                # Aplica a ordenação fixa
+                if len(ordenacao_fixa) > 0:
+                    indices_validos = [
+                        i for i in ordenacao_fixa if i in df_pivot_final.index
+                    ]
+                    restante = [
+                        i for i in df_pivot_final.index if i not in indices_validos
+                    ]
+                    df_pivot_final = df_pivot_final.reindex(indices_validos + restante)
+
+                # Formata nomes das colunas
+                df_pivot_final.columns = [col_fmt(c) for c in df_pivot_final.columns]
+
+                titulo_centralizado(titulo_tabela, 5)
+
+                # 3. ESTILIZAÇÃO
+                if metric_mode_cnae == "Saldo":
+                    # Formatação com % e separador decimal ,
+                    styler = df_pivot_final.style.format(
+                        lambda x: f"{x:+,.1f}%".replace(",", "X")
+                        .replace(".", ",")
+                        .replace("X", ".")
+                    ).map(style_saldo_variacao)
+                else:
+                    # Formatação padrão para Estoque
+                    styler = df_pivot_final.style.format(
+                        lambda x: f"{x:,.0f}".replace(",", ".")
+                    ).background_gradient(cmap=cmap, axis=0)
+
+                st.dataframe(styler, width="stretch")
+            else:
+                st.warning("Sem dados disponíveis para esta visualização.")
 
 
 def render_estabelecimentos_grafico_tab(
     df,
     coluna_agregacao,
     titulo_grafico,
+    metric_mode="Quantidade",
     color_map=None,
     reorder_cols=None,
     callback=None,
@@ -354,63 +559,114 @@ def render_estabelecimentos_grafico_tab(
     """
     Função auxiliar para renderizar uma aba de Estabelecimentos com gráfico.
     """
-    titulo_centralizado(titulo_grafico, 5)
+    # Definição de colunas e formatos baseado na métrica
+    if metric_mode == "Variação (%)":
+        coluna_valores = "qntd_estabelecimentos_yoy"
+        label_y = "Variação (%)"
+        fmt = ",.1f"
+        titulo_final = f"Variação Anual de Estabelecimentos {titulo_grafico}"
+    else:
+        coluna_valores = "qntd_estabelecimentos"
+        label_y = "Nº de Estabelecimentos"
+        fmt = ",.0f"
+        titulo_final = f"Número de Estabelecimentos {titulo_grafico}"
 
+    titulo_centralizado(titulo_final, 5)
+
+    # Prepara dados (agora escolhendo a coluna correta)
     df_grafico = preparar_dados_graficos_anuais(
         df_filtrado=df,
         coluna_agregacao=coluna_agregacao,
-        coluna_valores="qntd_estabelecimentos",
+        coluna_valores=coluna_valores,
     )
 
     if reorder_cols and not df_grafico.empty:
         df_grafico = df_grafico.reindex(columns=reorder_cols, fill_value=0)
 
-    # Não há filtros explícitos nesta função que exijam callback, apenas renderização.
-    # O filtro de ano é manipulado fora dela, se necessário.
+    # Ajuste do modo de barras
+    barmode = "group" if metric_mode == "Variação (%)" else "group"
 
     fig = criar_grafico_barras(
         df=df_grafico,
         titulo="",
-        label_y="Nº de Estabelecimentos",
+        label_y=label_y,
         color_map=color_map,
-        data_label_format=",.0f",
-        hover_label_format=",.0f",
+        barmode=barmode,
+        data_label_format=fmt,
+        hover_label_format=fmt,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
-def render_estabelecimentos_tabela_tab(df, index_col, titulo, municipio_interesse):
+def render_estabelecimentos_tabela_tab(
+    df, index_col, titulo, municipio_interesse, metric_mode="Quantidade"
+):
     """
     Função auxiliar para renderizar uma aba de Estabelecimentos com tabela (CNAE).
+    Ordenação fixa pela QUANTIDADE (maior para menor), independente da métrica visualizada.
     """
-    titulo_centralizado(f"{titulo} em {municipio_interesse}", 5)
+    # 1. Configurações de Exibição baseadas na Métrica
+    if metric_mode == "Variação (%)":
+        val_col = "qntd_estabelecimentos_yoy"
+        titulo_final = f"Variação Anual de Estabelecimentos {titulo}"
+        fmt = "{:,.1f}"
+        agg = "sum"
+    else:
+        val_col = "qntd_estabelecimentos"
+        titulo_final = f"Número de Estabelecimentos {titulo} "
+        fmt = "{:,.0f}"
+        agg = "sum"
+
+    titulo_centralizado(f"{titulo_final} em {municipio_interesse}", 5)
 
     ult_ano = df["ano"].max()
 
-    df_agrupado = (
-        df.groupby(["ano", index_col])["qntd_estabelecimentos"].sum().reset_index()
+    # 2. Lógica de Ordenação (Quantidade no último ano)
+    df_ordenacao = (
+        df[df["ano"] == ult_ano]
+        .groupby(index_col)["qntd_estabelecimentos"]
+        .sum()
+        .sort_values(ascending=False)
     )
+    # Lista ordenada de índices (nomes dos Grupos ou Subclasses)
+    ordem_indices = df_ordenacao.index.tolist()
 
-    df_pivot = df_agrupado.pivot_table(
+    # 3. Criação da Tabela Pivot (com os valores da métrica escolhida)
+    df_pivot = df.pivot_table(
         index=index_col,
         columns="ano",
-        values="qntd_estabelecimentos",
-        aggfunc="sum",
+        values=val_col,
+        aggfunc=agg,
+        observed=False,
         fill_value=0,
-    ).sort_values(by=ult_ano, ascending=False)
+    )
+
+    # 4. Aplicação da Ordenação na Tabela Pivot
+    indices_existentes = [idx for idx in ordem_indices if idx in df_pivot.index]
+    indices_faltantes = [idx for idx in df_pivot.index if idx not in indices_existentes]
+
+    # Reindexa a tabela para forçar a ordem calculada no passo 2
+    df_pivot = df_pivot.reindex(indices_existentes + indices_faltantes)
 
     df_pivot.index.name = titulo.split(" por ")[-1]
 
-    st.dataframe(
-        df_pivot.style.format("{:,.0f}").background_gradient(cmap="GnBu"),
-        use_container_width=True,
-    )
+    # 5. Estilização
+    styler = df_pivot.style.format(fmt)
+
+    if metric_mode == "Variação (%)":
+        styler = styler.map(style_saldo_variacao)
+    else:
+        styler = styler.background_gradient(cmap="GnBu")
+
+    st.dataframe(styler, width="stretch")
 
 
 def display_estabelecimentos(
     df_estabelecimentos_mun,
-    df_estabelecimentos_cnae,
     df_estabelecimentos_tamanho,
+    df_estabelecimentos_setor,
+    df_estabelecimentos_grupo,
+    df_estabelecimentos_subclasse,
     municipio_interesse,
     color_map=None,
     expander_state_key=None,
@@ -422,52 +678,75 @@ def display_estabelecimentos(
         st.session_state[expander_state_key] = False
 
     with st.expander("Estabelecimentos", expanded=st.session_state[expander_state_key]):
-        tabs = st.tabs(
-            ["Município", "Tamanho", "Setor", "CNAE - Grupo", "CNAE - Subclasse"]
+        aba_selecionada = st.pills(
+            "Selecione uma análise:",
+            ["Município", "Tamanho", "Setor", "CNAE - Grupo", "CNAE - Subclasse"],
+            selection_mode="single",
+            default="Município",
+            key="main_tab_nav_estabelecimentos",
+        )
+        if not aba_selecionada:
+            aba_selecionada = "Município"
+
+        metric_mode = (
+            st.segmented_control(
+                "Métrica:",
+                options=["Quantidade", "Variação (%)"],
+                default="Quantidade",
+                key="metric_mode_estabelecimentos",
+                selection_mode="single",
+                on_change=callback_func,
+            )
+            or "Quantidade"
         )
 
         # Aba 0: Comparativo entre Municípios
-        with tabs[0]:
+        if aba_selecionada == "Município":
             render_estabelecimentos_grafico_tab(
                 df=df_estabelecimentos_mun,
                 coluna_agregacao="municipio",
-                titulo_grafico="Quantidade de Estabelecimentos por Município",
+                titulo_grafico="por Município",
+                metric_mode=metric_mode,
                 color_map=color_map,
             )
 
         # Aba 1: Análise por Tamanho do Estabelecimento
-        with tabs[1]:
+        elif aba_selecionada == "Tamanho":
             render_estabelecimentos_grafico_tab(
                 df=df_estabelecimentos_tamanho,
                 coluna_agregacao="tamanho_estabelecimento",
-                titulo_grafico=f"Quantidade de Estabelecimentos por Número de Funcionários em {municipio_interesse}",
+                titulo_grafico=f"por Porte em {municipio_interesse}",
+                metric_mode=metric_mode,
                 reorder_cols=ordem_tamanho_estabelecimentos,
             )
 
         # Aba 2: Análise por Setor Econômico
-        with tabs[2]:
+        elif aba_selecionada == "Setor":
             render_estabelecimentos_grafico_tab(
-                df=df_estabelecimentos_cnae,
+                df=df_estabelecimentos_setor,
                 coluna_agregacao="grupo_ibge",
-                titulo_grafico=f"Quantidade de Estabelecimentos por Setor em {municipio_interesse}",
+                titulo_grafico=f"por Setor em {municipio_interesse}",
+                metric_mode=metric_mode,
             )
 
         # Aba 3: Tabela por CNAE - Grupo
-        with tabs[3]:
+        elif aba_selecionada == "CNAE - Grupo":
             render_estabelecimentos_tabela_tab(
-                df=df_estabelecimentos_cnae,
+                df=df_estabelecimentos_grupo,
                 index_col="grupo",
-                titulo="Quantidade de Estabelecimentos por CNAE - Grupo",
+                titulo="por CNAE - Grupo",
                 municipio_interesse=municipio_interesse,
+                metric_mode=metric_mode,
             )
 
         # Aba 4: Tabela por CNAE - Subclasse
-        with tabs[4]:
+        elif aba_selecionada == "CNAE - Subclasse":
             render_estabelecimentos_tabela_tab(
-                df=df_estabelecimentos_cnae,
+                df=df_estabelecimentos_subclasse,
                 index_col="subclasse",
-                titulo="Quantidade de Estabelecimentos por CNAE - Subclasse",
+                titulo="por CNAE - Subclasse",
                 municipio_interesse=municipio_interesse,
+                metric_mode=metric_mode,
             )
 
 
@@ -475,13 +754,18 @@ def show_page_empresas_ativas(
     df_cnpj,
     df_cnpj_cnae,
     df_cnpj_cnae_saldo,
+    df_cnpj_setor,
     df_mei,
     df_mei_cnae,
     df_mei_cnae_saldo,
+    df_mei_setor,
     municipio_de_interesse,
     df_estabelecimentos_mun,
-    df_estabelecimentos_cnae,
     df_estabelecimentos_tamanho,
+    # Novos DataFrames separados
+    df_estabelecimentos_setor,
+    df_estabelecimentos_grupo,
+    df_estabelecimentos_subclasse,
 ):
     # 1. INICIALIZAÇÃO DOS ESTADOS DOS EXPANDERS (Fechados por padrão)
     if "cnpj_ativos_expander_state" not in st.session_state:
@@ -503,6 +787,7 @@ def show_page_empresas_ativas(
     # CNPJ Ativos
     display_empresas_ativas_expander(
         df=df_cnpj,
+        df_setor=df_cnpj_setor,
         df_cnae=df_cnpj_cnae,
         df_cnae_saldo=df_cnpj_cnae_saldo,
         titulo_expander="CNPJ Ativos",
@@ -514,6 +799,7 @@ def show_page_empresas_ativas(
     # MEI Ativos
     display_empresas_ativas_expander(
         df=df_mei,
+        df_setor=df_mei_setor,
         df_cnae=df_mei_cnae,
         df_cnae_saldo=df_mei_cnae_saldo,
         titulo_expander="MEI Ativos",
@@ -527,8 +813,10 @@ def show_page_empresas_ativas(
     # Estabelecimentos
     display_estabelecimentos(
         df_estabelecimentos_mun=df_estabelecimentos_mun,
-        df_estabelecimentos_cnae=df_estabelecimentos_cnae,
         df_estabelecimentos_tamanho=df_estabelecimentos_tamanho,
+        df_estabelecimentos_setor=df_estabelecimentos_setor,
+        df_estabelecimentos_grupo=df_estabelecimentos_grupo,
+        df_estabelecimentos_subclasse=df_estabelecimentos_subclasse,
         municipio_interesse=municipio_de_interesse,
         color_map=CORES_MUNICIPIOS,
         expander_state_key="estabelecimentos_expander_state",

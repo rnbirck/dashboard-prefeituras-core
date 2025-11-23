@@ -194,12 +194,42 @@ def carregar_dados_vinculos_cnae(municipio, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
-def carregar_dados_estoque_cnae(municipio, anos):
+def carregar_dados_estoque_cnae_subclasse(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
     response = (
-        supabase_client.table("dados_estoque_cnae")
+        supabase_client.table("dados_estoque_cnae_subclasse")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_estoque_cnae_grupo(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_estoque_cnae_grupo")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_estoque_cnae_setor(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_estoque_cnae_setor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
@@ -239,6 +269,21 @@ def carregar_dados_vinculos_grau_instrucao(municipio, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_estoque_grau_instrucao(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_estoque_grau_instrucao")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_emprego_faixa_etaria(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
@@ -260,6 +305,21 @@ def carregar_dados_vinculos_faixa_etaria(municipio, anos):
         return pd.DataFrame()
     response = (
         supabase_client.table("dados_vinculos_faixa_etaria")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_estoque_faixa_etaria(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_estoque_faixa_etaria")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
@@ -299,6 +359,21 @@ def carregar_dados_vinculos_raca_cor(municipio, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_estoque_raca_cor(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_estoque_raca_cor")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_emprego_sexo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
@@ -329,12 +404,57 @@ def carregar_dados_vinculos_sexo(municipio, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
-def carregar_dados_estabelecimentos_cnae(municipio, anos):
+def carregar_dados_estoque_sexo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
     response = (
-        supabase_client.table("dados_estabelecimentos_cnae")
+        supabase_client.table("dados_estoque_sexo")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_estabelecimentos_setor(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_estabelecimentos_setor")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_estabelecimentos_grupo(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_estabelecimentos_grupo")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_estabelecimentos_subclasse(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_estabelecimentos_subclasse")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
@@ -380,6 +500,21 @@ def carregar_dados_renda_cnae(municipio, anos):
         return pd.DataFrame()
     response = (
         supabase_client.table("dados_renda_cnae")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_renda_faixa_salarial(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_renda_faixa_salarial")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
@@ -554,6 +689,21 @@ def carregar_dados_cnpj_cnae(municipio, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_cnpj_setor(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_cnpj_setor")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_cnpj_cnae_saldo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
@@ -590,6 +740,21 @@ def carregar_dados_mei_cnae(municipio, anos):
         return pd.DataFrame()
     response = (
         supabase_client.table("dados_mei_cnae")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_mei_setor(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_mei_setor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))

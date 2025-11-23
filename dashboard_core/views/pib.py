@@ -111,16 +111,25 @@ def display_pib_total_expander(
         metricas_disponiveis = dicionario_indicadores[indicador_selecionado]
 
         metrica_selecionada = "default"
-        # Se houver mais de uma métrica (ex: Valor e Taxa), mostra o radio
+        # Se houver mais de uma métrica (ex: Valor e Taxa), mostra o segmented_control
         with col2:
             if "default" not in metricas_disponiveis:
-                metrica_selecionada = st.radio(
+                # CORREÇÃO: Inicialização explícita da chave
+                key_metric = f"{key_prefix}_metric_segmented"
+                if key_metric not in st.session_state:
+                    st.session_state[key_metric] = list(metricas_disponiveis.keys())[0]
+
+                metrica_selecionada = st.segmented_control(
                     "Selecione a métrica:",
                     options=list(metricas_disponiveis.keys()),
-                    key=f"{key_prefix}_metric_radio",
-                    horizontal=True,
+                    key=key_metric,
+                    selection_mode="single",
                     on_change=callback_func,
                 )
+
+                # Fallback: se desmarcar (None), força o padrão
+                if not metrica_selecionada:
+                    metrica_selecionada = list(metricas_disponiveis.keys())[0]
 
         (coluna_selecionada, label_y, data_format, reversed_y, chart_type) = (
             metricas_disponiveis[metrica_selecionada]
@@ -266,13 +275,22 @@ def display_pib_vab_expander(
             metricas_setor = vab_map[visualizacao_selecionada]
 
             with col2:
-                metrica_selecionada = st.radio(
+                # CORREÇÃO: Inicialização explícita da chave
+                key_metrica = f"{key_prefix}_metrica_segmented"
+                if key_metrica not in st.session_state:
+                    st.session_state[key_metrica] = list(metricas_setor.keys())[0]
+
+                metrica_selecionada = st.segmented_control(
                     "Selecione a métrica:",
                     options=list(metricas_setor.keys()),
-                    key=f"{key_prefix}_metrica_radio",
-                    horizontal=True,
+                    key=key_metrica,
+                    selection_mode="single",
                     on_change=callback_func,
                 )
+
+                # Fallback: se desmarcar (None), força o padrão
+                if not metrica_selecionada:
+                    metrica_selecionada = list(metricas_setor.keys())[0]
 
             (coluna_selecionada, label_y, data_format, reversed_y, chart_type) = (
                 metricas_setor[metrica_selecionada]
@@ -361,6 +379,9 @@ def show_page_pib(df_pib):
         },
         "Posição no Ranking do PIB do RS": {
             "default": ("posicao_pib_geral", "Posição", ",.0f", True, "linha")
+        },
+        "Posição no Ranking do PIB per Capita do RS": {
+            "default": ("posicao_pib_per_capita", "Posição", ",.0f", True, "linha")
         },
     }
 

@@ -7,16 +7,18 @@ from dashboard_core.utils import (
 )
 
 CORES_MUNICIPIOS = {}
+anos_de_interesse = []
 
 
-def set_educacao_config(cores_municipios):
+def set_educacao_config(cores_municipios, anos_interesse):
     """
     Configura valores específicos do município que antes eram importados
     do dashboard_core.config. Deve ser chamado pelo app.py antes de
     renderizar a página de educacao.
     """
-    global CORES_MUNICIPIOS
+    global CORES_MUNICIPIOS, anos_de_interesse
     CORES_MUNICIPIOS = cores_municipios or {}
+    anos_de_interesse = anos_interesse or []
 
 
 # --- FUNÇÕES DE CALLBACK ---
@@ -58,10 +60,14 @@ def ideb_escolas_callback():
 
 @st.cache_data
 def preparar_dados_grafico_educacao(
-    df_filtrado, coluna_selecionada, dependencia, municipios_selecionados
+    df_filtrado,
+    coluna_selecionada,
+    dependencia,
+    municipios_selecionados,
+    anos_visualizacao=None,
 ):
     if df_filtrado.empty:
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame()
 
     df_processed = pd.DataFrame()
 
@@ -78,7 +84,7 @@ def preparar_dados_grafico_educacao(
         df_processed = df_filtrado[df_filtrado["dependencia"] == dependencia]
 
     if df_processed.empty:
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame()
 
     anos = sorted(df_filtrado["ano"].unique())
 
@@ -98,18 +104,33 @@ def preparar_dados_grafico_educacao(
         fill_value=0,
     ).sort_index()
 
-    return df_graf
+    # Calcula variação percentual (antes de filtrar)
+    df_graf_var = df_graf.pct_change() * 100
+
+    # Aplicar filtro de anos de interesse apenas ao DataFrame de valores absolutos
+    if anos_visualizacao:
+        df_graf = df_graf[df_graf.index.isin(anos_visualizacao)]
+
+    return df_graf, df_graf_var
 
 
 @st.cache_data
 def preparar_dados_grafico_ideb_municipio(
-    df, indicador, categoria, dependencia, municipios_selecionados
+    df,
+    indicador,
+    categoria,
+    dependencia,
+    municipios_selecionados,
+    anos_visualizacao=None,
 ):
     df_filtrado = df[
         (df["dependencia"] == dependencia)
         & (df["indicador"] == indicador)
         & (df["categoria"] == categoria)
     ]
+
+    if df_filtrado.empty:
+        return pd.DataFrame()
 
     anos = sorted(df_filtrado["ano"].unique())
 
@@ -160,8 +181,8 @@ def display_educacao(
     label_y,
     data_label_format,
     hover_label_format,
-    expander_state_key,  # NOVO
-    callback_func,  # NOVO
+    expander_state_key,
+    callback_func,
 ):
     """Função genérica para exibir a seção de educacao matriculas e rendimento."""
 
@@ -178,43 +199,74 @@ def display_educacao(
                 "Selecione um indicador:",
                 options=list(dicionario_indicadores.keys()),
                 key=f"{key_prefix}_selectbox_indicadores",
-                on_change=callback_func,  # ADICIONADO CALLBACK
+                on_change=callback_func,
             )
         with col2:
             dependecia_selecionada = st.selectbox(
                 "Selecione uma dependência:",
                 options=list(dicionario_dependencia.keys()),
                 key=f"{key_prefix}_selectbox_dependencia",
-                on_change=callback_func,  # ADICIONADO CALLBACK
+                on_change=callback_func,
             )
 
         coluna_selecionada = dicionario_indicadores[indicador_selecionado]
 
         dependencia_selecionada = dicionario_dependencia[dependecia_selecionada]
 
-        df_graf = preparar_dados_grafico_educacao(
+        df_graf, df_graf_var = preparar_dados_grafico_educacao(
             df_filtrado=df_filtrado,
             coluna_selecionada=coluna_selecionada,
             dependencia=dependencia_selecionada,
             municipios_selecionados=municipios_selecionados,
+            anos_visualizacao=anos_de_interesse,
         )
 
-        titulo_centralizado(
-            f"{titulo_expander} - {indicador_selecionado} - {dependecia_selecionada}", 5
+        # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
+        key_main_tab = f"main_tab_nav_{key_prefix}"
+        if key_main_tab not in st.session_state:
+            st.session_state[key_main_tab] = "Total"
+
+        aba_selecionada = st.pills(
+            "Selecione a visualização:",
+            options=["Total", "Variação (%)"],
+            selection_mode="single",
+            key=key_main_tab,
         )
-        fig = criar_grafico_barras(
-            df=df_graf,
-            titulo="",
-            label_y=f"{label_y}",
-            barmode="group",
-            height=400,
-            data_label_format=f"{data_label_format}",
-            hover_label_format=f"{hover_label_format}",
-            color_map=CORES_MUNICIPIOS,
-        )
-        st.plotly_chart(
-            fig, use_container_width=True
-        )  # Ajustado para use_container_width=True
+
+        if not aba_selecionada:
+            aba_selecionada = "Total"
+
+        if aba_selecionada == "Variação (%)":
+            # Remove anos com variação nula (NaN) em todas as colunas
+            df_plot = df_graf_var.dropna(how="all")
+            titulo_grafico = f"{titulo_expander} - {indicador_selecionado} - {dependecia_selecionada} - Variação (%)"
+            lbl_y = "Variação (%)"
+            fmt = "+,.1f"
+            hover_fmt = "+,.2f"
+        else:
+            df_plot = df_graf
+            titulo_grafico = f"{titulo_expander} - {indicador_selecionado} - {dependecia_selecionada}"
+            lbl_y = label_y
+            fmt = data_label_format
+            hover_fmt = hover_label_format
+
+        titulo_centralizado(titulo_grafico, 5)
+
+        if not df_plot.empty:
+            df_plot.index = df_plot.index.astype(str)
+            fig = criar_grafico_barras(
+                df=df_plot,
+                titulo="",
+                label_y=lbl_y,
+                barmode="group",
+                height=400,
+                data_label_format=fmt,
+                hover_label_format=hover_fmt,
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.warning("Sem dados disponíveis para exibição.")
 
 
 def display_taxa_rendimento(
@@ -228,8 +280,8 @@ def display_taxa_rendimento(
     label_y,
     data_label_format,
     hover_label_format,
-    expander_state_key,  # NOVO
-    callback_func,  # NOVO
+    expander_state_key,
+    callback_func,
 ):
     """Função específica para Taxas de Rendimento com 3 seletores."""
 
@@ -248,21 +300,21 @@ def display_taxa_rendimento(
                 "Selecione um indicador:",
                 options=list(dicionario_indicador_base.keys()),
                 key=f"{key_prefix}_selectbox_indicador",
-                on_change=callback_func,  # ADICIONADO CALLBACK
+                on_change=callback_func,
             )
         with col2:
             nivel_selecionado_label = st.selectbox(
                 "Selecione o nível de ensino:",
                 options=list(dicionario_nivel_ensino.keys()),
                 key=f"{key_prefix}_selectbox_nivel",
-                on_change=callback_func,  # ADICIONADO CALLBACK
+                on_change=callback_func,
             )
         with col3:
             dependencia_selecionada_label = st.selectbox(
                 "Selecione uma dependência:",
                 options=list(dicionario_dependencia.keys()),
                 key=f"{key_prefix}_selectbox_dependencia",
-                on_change=callback_func,  # ADICIONADO CALLBACK
+                on_change=callback_func,
             )
 
         indicador_base = dicionario_indicador_base[indicador_selecionado_label]
@@ -271,11 +323,12 @@ def display_taxa_rendimento(
 
         coluna_selecionada = f"{indicador_base}_{nivel_base}"
 
-        df_graf = preparar_dados_grafico_educacao(
+        df_graf, df_graf_var = preparar_dados_grafico_educacao(
             df_filtrado=df_filtrado,
             coluna_selecionada=coluna_selecionada,
             dependencia=dependencia_valor,
             municipios_selecionados=municipios_selecionados,
+            anos_visualizacao=anos_de_interesse,
         )
 
         titulo_centralizado(
@@ -293,9 +346,7 @@ def display_taxa_rendimento(
             hover_label_format=f"{hover_label_format}",
             color_map=CORES_MUNICIPIOS,
         )
-        st.plotly_chart(
-            fig, use_container_width=True
-        )  # Ajustado para use_container_width=True
+        st.plotly_chart(fig, width="stretch")
 
 
 def display_ideb_mun(
@@ -306,8 +357,8 @@ def display_ideb_mun(
     dicionario_indicadores,
     dicionario_dependencia,
     dicionario_categoria,
-    expander_state_key,  # NOVO
-    callback_func,  # NOVO
+    expander_state_key,
+    callback_func,
 ):
     """Função genérica para exibir a seção de IDEB MUNCIPIOS."""
 
@@ -328,21 +379,21 @@ def display_ideb_mun(
                 "Selecione uma etapa de ensino:",
                 options=list(dicionario_categoria.keys()),
                 key=f"{key_prefix}_selectbox_categoria",
-                on_change=callback_func,  # ADICIONADO CALLBACK
+                on_change=callback_func,
             )
         with col2:
             indicador_selecionado = st.selectbox(
                 "Selecione um indicador:",
                 options=list(dicionario_indicadores.keys()),
                 key=f"{key_prefix}_selectbox_indicadores",
-                on_change=callback_func,  # ADICIONADO CALLBACK
+                on_change=callback_func,
             )
         with col3:
             dependencia_selecionada = st.selectbox(
                 "Selecione uma dependência:",
                 options=list(dicionario_dependencia.keys()),
                 key=f"{key_prefix}_selectbox_dependencia",
-                on_change=callback_func,  # ADICIONADO CALLBACK
+                on_change=callback_func,
             )
 
         categoria = dicionario_categoria[categoria_selecionada]
@@ -357,6 +408,7 @@ def display_ideb_mun(
             indicador=indicador,
             dependencia=dependencia,
             municipios_selecionados=municipios_selecionados,
+            anos_visualizacao=anos_de_interesse,
         )
 
         if not df_graf.empty:
@@ -376,9 +428,7 @@ def display_ideb_mun(
             hover_label_format=",.1f",
             color_map=CORES_MUNICIPIOS,
         )
-        st.plotly_chart(
-            fig, use_container_width=True
-        )  # Ajustado para use_container_width=True
+        st.plotly_chart(fig, width="stretch")
 
 
 def display_ideb_escolas(
@@ -387,8 +437,8 @@ def display_ideb_escolas(
     key_prefix,
     dicionario_dependencia,
     dicionario_categoria,
-    expander_state_key,  # NOVO
-    callback_func,  # NOVO
+    expander_state_key,
+    callback_func,
 ):
     if expander_state_key not in st.session_state:
         st.session_state[expander_state_key] = False
@@ -453,9 +503,7 @@ def display_ideb_escolas(
             .background_gradient(cmap="GnBu")
         )
 
-        st.dataframe(
-            df_tab_renomeado, use_container_width=True
-        )  # Ajustado para use_container_width=True
+        st.dataframe(df_tab_renomeado, width="stretch")
 
 
 def show_page_educacao(
@@ -553,7 +601,10 @@ def show_page_educacao(
         "Anos Finais do Ens. Fundamental": "fundamental_anos_finais",
     }
 
-    INDICADOR_ESCOLAS = {"Número de Escolas": "qntd_escolas"}
+    INDICADOR_ESCOLAS = {
+        "Número de Escolas": "qntd_escolas",
+        "Média de Matrículas por Escola": "matriculas_escolas",
+    }
 
     INDICADOR_IDEB = {
         "Nota SAEB Português": "nota_port",
