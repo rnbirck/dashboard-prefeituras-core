@@ -722,7 +722,7 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
             texto_busca_prod = st.text_input(
                 "🔍 Pesquisar Produto:",
                 key="busca_prod",
-                placeholder="Ex: Calçados, Ferramentas",
+                placeholder="Ex: Calçado, Ferramentas",
             )
 
             df_pivot_prod = preparar_dados_comex_produto_pais_pivot(
@@ -787,7 +787,7 @@ def display_comex_produto_pais_expander(df, municipio_interesse):
             texto_busca_pp = st.text_input(
                 "🔍 Pesquisar País ou Produto:",
                 key="busca_pp",
-                placeholder="Ex: Estados Unidos ou Calçados",
+                placeholder="Ex: Estados Unidos ou Calçado",
             )
 
             df_pivot_pp = preparar_dados_comex_produto_pais_pivot(
