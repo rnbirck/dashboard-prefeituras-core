@@ -44,61 +44,180 @@ def indicadores_callback():
 # FUNÇÕES DA PÁGINA DE FINANÇAS
 # ==============================================================================
 @st.cache_data
-def preparar_dados_siconfi(df, cod_conta):
-    """Prepara os dados brutos do SICONFI para um município e conta específicos."""
+def preparar_dados_graficos_siconfi(df_filtrado, cod_conta, anos_visualizacao):
+    """Prepara os DataFrames pivotados para as visualizações do SICONFI."""
+    df_hist = pd.DataFrame()
+    df_hist_var = pd.DataFrame()
+    df_bim = pd.DataFrame()
+    df_bim_var = pd.DataFrame()
+    df_acum = pd.DataFrame()
+    df_acum_var = pd.DataFrame()
+    ult_ano, ult_bim = None, None
+
+    if df_filtrado.empty:
+        return (
+            df_hist,
+            df_hist_var,
+            df_bim,
+            df_bim_var,
+            df_acum,
+            df_acum_var,
+            ult_ano,
+            ult_bim,
+        )
+
+    # Filtrar pela conta
+    df_conta = df_filtrado[df_filtrado["cod_conta"] == cod_conta].copy()
+
+    if df_conta.empty:
+        return (
+            df_hist,
+            df_hist_var,
+            df_bim,
+            df_bim_var,
+            df_acum,
+            df_acum_var,
+            ult_ano,
+            ult_bim,
+        )
+
+    # Converter valor para milhões
+    df_conta["valor_milhoes"] = df_conta["valor"] / 1000000
+
+    # Determinar último ano e bimestre
+    df_range = df_conta[df_conta["ano"].isin(anos_visualizacao)]
+    if df_range.empty:
+        ult_ano = df_conta["ano"].max()
+    else:
+        ult_ano = df_range["ano"].max()
+
+    ult_bim = df_conta[df_conta["ano"] == ult_ano]["bimestre"].max()
+
+    # 1. EVOLUÇÃO BIMESTRAL (No Bimestre)
+    df_no_bim = df_conta[df_conta["coluna"] == "No Bimestre (b)"].copy()
+
+    if not df_no_bim.empty:
+        # Criar índice combinado para evolução temporal
+        # Mapear bimestre para nome legível
+        df_no_bim["bimestre_nome"] = df_no_bim["bimestre"].map(BIMESTRE_MAP)
+        df_no_bim["periodo"] = (
+            df_no_bim["bimestre_nome"] + "/" + df_no_bim["ano"].astype(str).str[-2:]
+        )
+
+        # Criar coluna de ordenação (ano * 10 + bimestre)
+        df_no_bim["ordem"] = df_no_bim["ano"] * 10 + df_no_bim["bimestre"]
+
+        df_hist_full = df_no_bim.pivot_table(
+            index="periodo",
+            columns="municipio",
+            values="valor_milhoes",
+            aggfunc="sum",
+            fill_value=0,
+        )
+
+        # Criar DataFrame auxiliar para ordenação
+        ordem_map = df_no_bim.groupby("periodo")["ordem"].first().sort_values()
+        df_hist_full = df_hist_full.reindex(ordem_map.index)
+
+        # Calcular variação YoY para evolução
+        # Agrupar por município e bimestre, calcular variação
+        df_var_calc = df_no_bim.sort_values(["municipio", "bimestre", "ano"])
+        df_var_calc["valor_ano_anterior"] = df_var_calc.groupby(
+            ["municipio", "bimestre"]
+        )["valor_milhoes"].shift(1)
+        df_var_calc["variacao_yoy"] = np.where(
+            (df_var_calc["valor_ano_anterior"].notna())
+            & (df_var_calc["valor_ano_anterior"] != 0),
+            (df_var_calc["valor_milhoes"] / df_var_calc["valor_ano_anterior"] - 1)
+            * 100,
+            np.nan,
+        )
+
+        df_hist_var_full = df_var_calc.pivot_table(
+            index="periodo",
+            columns="municipio",
+            values="variacao_yoy",
+            aggfunc="first",
+            fill_value=0,
+        )
+
+        # Aplicar mesma ordenação
+        df_hist_var_full = df_hist_var_full.reindex(ordem_map.index)
+
+        # Filtrar por anos de visualização
+        anos_str = tuple([str(ano)[-2:] for ano in anos_visualizacao])
+        df_hist = df_hist_full[df_hist_full.index.str.endswith(anos_str)]
+        df_hist_var = df_hist_var_full[df_hist_var_full.index.str.endswith(anos_str)]
+
+    # 2. BIMESTRE (Comparar mesmo bimestre ao longo dos anos)
+    df_bim_atual = df_no_bim[df_no_bim["bimestre"] == ult_bim]
+
+    if not df_bim_atual.empty:
+        df_bim_full = df_bim_atual.pivot_table(
+            index="ano",
+            columns="municipio",
+            values="valor_milhoes",
+            aggfunc="sum",
+            fill_value=0,
+        ).sort_index()
+
+        # Adicionar informação do bimestre no índice
+        bimestre_nome = BIMESTRE_MAP.get(ult_bim, f"{ult_bim}º Bim")
+        df_bim_full.index = df_bim_full.index.astype(str) + f" ({bimestre_nome})"
+
+        # Variação YoY
+        df_bim_var_full = df_bim_full.pct_change() * 100
+
+        # Filtrar anos (agora o índice tem o formato "2023 (Jan-Fev)")
+        anos_str = [str(ano) for ano in anos_visualizacao]
+        df_bim = df_bim_full[df_bim_full.index.str.startswith(tuple(anos_str))]
+        df_bim_var = df_bim_var_full[
+            df_bim_var_full.index.str.startswith(tuple(anos_str))
+        ]
+
+    # 3. ACUMULADO ATÉ O BIMESTRE
+    df_acum_data = df_conta[df_conta["coluna"] == "Até o Bimestre (c)"]
+    df_acum_bim = df_acum_data[df_acum_data["bimestre"] == ult_bim]
+
+    if not df_acum_bim.empty:
+        df_acum_full = df_acum_bim.pivot_table(
+            index="ano",
+            columns="municipio",
+            values="valor_milhoes",
+            aggfunc="sum",
+            fill_value=0,
+        ).sort_index()
+
+        # Adicionar informação do bimestre no índice
+        bimestre_nome = BIMESTRE_MAP.get(ult_bim, f"{ult_bim}º Bim")
+        df_acum_full.index = df_acum_full.index.astype(str) + f" (até {bimestre_nome})"
+
+        # Variação YoY
+        df_acum_var_full = df_acum_full.pct_change() * 100
+
+        # Filtrar anos (agora o índice tem o formato "2023 (até Jan-Fev)")
+        anos_str = [str(ano) for ano in anos_visualizacao]
+        df_acum = df_acum_full[df_acum_full.index.str.startswith(tuple(anos_str))]
+        df_acum_var = df_acum_var_full[
+            df_acum_var_full.index.str.startswith(tuple(anos_str))
+        ]
+
     return (
-        df[(df["cod_conta"] == cod_conta)]
-        .sort_values(by=["municipio", "coluna", "bimestre", "ano"])
-        .assign(
-            valor_milhoes=lambda x: x["valor"] / 1000000,
-            valor_ano_anterior=lambda x: x.groupby(["municipio", "coluna", "bimestre"])[
-                "valor"
-            ].shift(1),
-        )
-        .pipe(
-            lambda x: x.assign(
-                variacao_yoy=lambda x: np.where(
-                    x["valor_ano_anterior"].notna() & x["valor_ano_anterior"] != 0,
-                    (x["valor"] / x["valor_ano_anterior"] - 1) * 100,
-                    np.nan,
-                )
-            )
-        )
+        df_hist,
+        df_hist_var,
+        df_bim,
+        df_bim_var,
+        df_acum,
+        df_acum_var,
+        ult_ano,
+        ult_bim,
     )
-
-
-@st.cache_data
-def _pivot_siconfi_data(df_preparado, coluna_valor, coluna_filtro):
-    """
-    Função auxiliar para pivotar os dados do SICONFI e formatar o índice.
-    """
-    if df_preparado.empty:
-        return pd.DataFrame()
-
-    df_pivot = df_preparado.query(f"coluna == '{coluna_filtro}'").pivot_table(
-        index=["ano", "bimestre"],
-        columns="municipio",
-        values=coluna_valor,
-        aggfunc="sum",
-        fill_value=0,
-    )
-
-    if df_pivot.empty:
-        return pd.DataFrame()
-
-    bimestre_txt = (
-        df_pivot.index.get_level_values("bimestre").map(BIMESTRE_MAP).fillna("Desconh.")
-    )
-    ano_txt = df_pivot.index.get_level_values("ano").astype(str).str.slice(-2)
-    df_pivot.index = bimestre_txt + "-" + ano_txt
-
-    return df_pivot
 
 
 def display_siconfi_consolidado(df, expander_state_key, callback_func):
     """
     Exibe um expander consolidado para todos os indicadores do SICONFI
-    com seletores internos.
+    com navegação por pills (Evolução Bimestral, Bimestre, Acumulado até o Bimestre).
     """
     if expander_state_key not in st.session_state:
         st.session_state[expander_state_key] = False
@@ -139,113 +258,291 @@ def display_siconfi_consolidado(df, expander_state_key, callback_func):
         "Indicadores Bimestrais da Execução Orçamentária",
         expanded=st.session_state[expander_state_key],
     ):
-        col1, col3, col2 = st.columns([0.5, 0.05, 0.45])
-        with col1:
-            conta_selecionada = st.selectbox(
-                "Selecione a Conta:",
-                options=list(CONTAS_SICONFI.keys()),
-                key="siconfi_conta_selectbox",
-                on_change=callback_func,
-            )
-            cod_conta = CONTAS_SICONFI[conta_selecionada]
-
-        with col2:
-            view_mode = st.radio(
-                "Selecione a Visualização:",
-                options=["Valor (Milhões R$)", "Variação Anual (%)"],
-                horizontal=True,
-                key="siconfi_view_mode_radio",
-                on_change=callback_func,
-            )
-
-        col_radio1, col_radio3, col_radio2 = st.columns([0.5, 0.05, 0.45])
-        with col_radio1:
-            anos_selecionados_slider = st.slider(
-                "Selecione o Período (Anos):",
-                min_value=min_ano_valido,
-                max_value=max_ano_valido,
-                value=(default_start, default_end),
-                step=1,
-                key="siconfi_ano_slider",
-                format="%d",
-                on_change=callback_func,
-            )
-
-        with col_radio2:
-            periodo_mode = st.radio(
-                "Selecione o Período:",
-                options=["No Bimestre", "Até o Bimestre"],
-                horizontal=True,
-                key="siconfi_periodo_mode_radio",
-                on_change=callback_func,
-            )
-
-        start_ano_slider, end_ano_slider = anos_selecionados_slider
-
-        anos_para_visualizar = list(range(start_ano_slider, end_ano_slider + 1))
-
-        ano_anterior_inicio = start_ano_slider - 1
-
-        anos_para_dados = list(range(ano_anterior_inicio, end_ano_slider + 1))
-
-        df_filtrado_anos = df[df["ano"].isin(anos_para_dados)]
-
-        # Prepara os dados uma única vez com base na conta e anos selecionados
-        df_siconfi_mun = preparar_dados_siconfi(
-            df=df_filtrado_anos,
-            cod_conta=cod_conta,
+        # --- 1. SELETOR DE CONTA ---
+        indicador_siconfi_selecionado = st.selectbox(
+            "Selecione a Conta:",
+            options=list(CONTAS_SICONFI.keys()),
+            key="siconfi_selectbox_conta",
+            on_change=callback_func,
         )
 
-        # Define os parâmetros do gráfico com base nas seleções
-        if view_mode == "Valor (Milhões R$)":
-            coluna_valor = "valor_milhoes"
-            label_y = "Valor (Milhões R$)"
-            data_label_format = ".1f"
-            hover_label_format = ",.2f"
-        else:  # Variação Anual
-            coluna_valor = "variacao_yoy"
-            label_y = "Variação Anual (%)"
-            data_label_format = ".1f"
-            hover_label_format = ",.2f"
+        cod_conta = CONTAS_SICONFI[indicador_siconfi_selecionado]
 
-        if periodo_mode == "No Bimestre":
-            coluna_filtro = "No Bimestre (b)"
-            titulo_grafico = f"{conta_selecionada} - {view_mode} (Por Bimestre)"
-        else:  # Até o Bimestre
-            coluna_filtro = "Até o Bimestre (c)"
-            titulo_grafico = (
-                f"{conta_selecionada} - {view_mode} (Acumulado até o Bimestre)"
+        # --- 2. NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
+        key_main_tab = "main_tab_nav_siconfi"
+        if key_main_tab not in st.session_state:
+            st.session_state[key_main_tab] = "Evolução Bimestral"
+
+        aba_selecionada = st.pills(
+            "Selecione o tipo de análise temporal:",
+            options=["Evolução Bimestral", "Bimestre", "Acumulado até o Bimestre"],
+            selection_mode="single",
+            key=key_main_tab,
+        )
+
+        # Fallback caso o usuário desmarque
+        if not aba_selecionada:
+            aba_selecionada = "Evolução Bimestral"
+
+        # --- ABA 1: EVOLUÇÃO BIMESTRAL ---
+        if aba_selecionada == "Evolução Bimestral":
+            # Slider de anos DENTRO da aba de Evolução
+            col_slider, _ = st.columns([0.7, 0.3])
+            with col_slider:
+                anos_selecionados_slider = st.slider(
+                    "Selecione o intervalo de anos:",
+                    min_value=min_ano_valido,
+                    max_value=max_ano_valido,
+                    value=(default_start, default_end),
+                    key="siconfi_slider_anos",
+                )
+
+            start_ano_slider, end_ano_slider = anos_selecionados_slider
+            anos_para_visualizar = list(range(start_ano_slider, end_ano_slider + 1))
+
+            # Incluir ano anterior para cálculo de variação
+            ano_anterior_inicio = start_ano_slider - 1
+            anos_para_dados = list(range(ano_anterior_inicio, end_ano_slider + 1))
+            df_filtrado_anos = df[df["ano"].isin(anos_para_dados)]
+
+            # Preparação dos dados
+            (
+                hist_abs,
+                hist_var,
+                _,
+                _,
+                _,
+                _,
+                ult_ano,
+                ult_bim,
+            ) = preparar_dados_graficos_siconfi(
+                df_filtrado_anos, cod_conta, anos_para_visualizar
             )
 
-        # Pivota os dados e formata o índice
-        df_graf_bruto = _pivot_siconfi_data(
-            df_preparado=df_siconfi_mun,
-            coluna_valor=coluna_valor,
-            coluna_filtro=coluna_filtro,
-        )
+            # Chave para o segmented_control
+            key_hist = "hist_mode_siconfi"
 
-        anos_para_visualizar_str = tuple(
-            [str(ano)[-2:] for ano in anos_para_visualizar]
-        )
+            modo_hist = st.segmented_control(
+                "Visualizar:",
+                options=["Valor (Milhões R$)", "Variação (%)"],
+                key=key_hist,
+                selection_mode="single",
+                on_change=callback_func,
+                default="Valor (Milhões R$)",
+            )
 
-        df_graf = df_graf_bruto[
-            df_graf_bruto.index.str.endswith(anos_para_visualizar_str)
-        ]
+            # Fallback: se desmarcar (None), força o padrão
+            if not modo_hist:
+                modo_hist = "Valor (Milhões R$)"
 
-        titulo_centralizado(titulo_grafico, 5)
+            if modo_hist == "Valor (Milhões R$)":
+                df_plot = hist_abs
+                titulo_grafico = f"{indicador_siconfi_selecionado} - Evolução Bimestral"
+                label_y = "Milhões R$"
+                data_label_format = ",.1f"
+                hover_label_format = ",.2f"
+            else:
+                df_plot = hist_var
+                titulo_grafico = f"{indicador_siconfi_selecionado} - Evolução Bimestral - Variação (%)"
+                label_y = "Variação (%) em relação ao mesmo período do ano anterior"
+                data_label_format = "+,.1f"
+                hover_label_format = "+,.2f"
 
-        fig_siconfi = criar_grafico_barras(
-            df=df_graf,
-            titulo="",
-            label_y=label_y,
-            barmode="group",
-            height=400,
-            data_label_format=data_label_format,
-            hover_label_format=hover_label_format,
-            color_map=CORES_MUNICIPIOS,
-        )
+            titulo_centralizado(titulo_grafico, 5)
 
-        st.plotly_chart(fig_siconfi, use_container_width=True)
+            if not df_plot.empty:
+                fig = criar_grafico_barras(
+                    df=df_plot,
+                    titulo="",
+                    label_y=label_y,
+                    barmode="group",
+                    height=400,
+                    data_label_format=data_label_format,
+                    hover_label_format=hover_label_format,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Não há dados disponíveis para o período selecionado.")
+
+        # --- ABA 2: BIMESTRE ---
+        elif aba_selecionada == "Bimestre":
+            # Preparar dados com TODOS os anos disponíveis (sem filtro)
+            anos_para_visualizar_bim = anos_validos_selecao
+            ano_anterior_inicio_bim = min(anos_validos_selecao) - 1
+            anos_para_dados_bim = [ano_anterior_inicio_bim] + list(
+                anos_para_visualizar_bim
+            )
+            df_filtrado_anos_bim = df[df["ano"].isin(anos_para_dados_bim)]
+
+            (
+                _,
+                _,
+                bim_abs,
+                bim_var,
+                _,
+                _,
+                ult_ano,
+                ult_bim,
+            ) = preparar_dados_graficos_siconfi(
+                df_filtrado_anos_bim, cod_conta, anos_para_visualizar_bim
+            )
+
+            if ult_bim:
+                # Chave para o segmented_control
+                key_bim = "bim_mode_siconfi"
+
+                modo_bim = st.segmented_control(
+                    "Visualizar:",
+                    options=["Valor (Milhões R$)", "Variação (%)"],
+                    key=key_bim,
+                    selection_mode="single",
+                    on_change=callback_func,
+                    default="Valor (Milhões R$)",
+                )
+
+                if not modo_bim:
+                    modo_bim = "Valor (Milhões R$)"
+
+                bimestre_txt = BIMESTRE_MAP.get(ult_bim, f"{ult_bim}º Bim")
+
+                if modo_bim == "Variação (%)":
+                    df_plot = bim_var.sort_index(ascending=True)
+                    titulo_grafico = f"{indicador_siconfi_selecionado} no Bimestre de {bimestre_txt} - Variação (%)"
+                    label_y = "Variação (%) em relação ao mesmo período do ano anterior"
+                    data_label_format = "+,.1f"
+                    hover_label_format = "+,.2f"
+
+                    titulo_centralizado(titulo_grafico, 5)
+
+                    if not df_plot.empty:
+                        fig = criar_grafico_barras(
+                            df=df_plot,
+                            titulo="",
+                            label_y=label_y,
+                            barmode="group",
+                            height=400,
+                            data_label_format=data_label_format,
+                            hover_label_format=hover_label_format,
+                            color_map=CORES_MUNICIPIOS,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Não há dados de variação disponíveis.")
+
+                else:  # Valor (Milhões R$)
+                    df_plot = bim_abs.sort_index(ascending=True)
+                    titulo_grafico = (
+                        f"{indicador_siconfi_selecionado} no Bimestre de {bimestre_txt}"
+                    )
+
+                    titulo_centralizado(titulo_grafico, 5)
+
+                    if not df_plot.empty:
+                        fig_abs = criar_grafico_barras(
+                            df=df_plot,
+                            titulo="",
+                            label_y="Milhões R$",
+                            barmode="group",
+                            height=400,
+                            data_label_format=",.1f",
+                            hover_label_format=",.2f",
+                            color_map=CORES_MUNICIPIOS,
+                        )
+                        st.plotly_chart(fig_abs, use_container_width=True)
+                    else:
+                        st.info("Sem dados disponíveis.")
+            else:
+                st.warning("Não há dados de bimestre disponíveis.")
+
+        # --- ABA 3: ACUMULADO ATÉ O BIMESTRE ---
+        elif aba_selecionada == "Acumulado até o Bimestre":
+            # Preparar dados com TODOS os anos disponíveis (sem filtro)
+            anos_para_visualizar_acum = anos_validos_selecao
+            ano_anterior_inicio_acum = min(anos_validos_selecao) - 1
+            anos_para_dados_acum = [ano_anterior_inicio_acum] + list(
+                anos_para_visualizar_acum
+            )
+            df_filtrado_anos_acum = df[df["ano"].isin(anos_para_dados_acum)]
+
+            (
+                _,
+                _,
+                _,
+                _,
+                acum_abs,
+                acum_var,
+                ult_ano,
+                ult_bim,
+            ) = preparar_dados_graficos_siconfi(
+                df_filtrado_anos_acum, cod_conta, anos_para_visualizar_acum
+            )
+
+            if ult_bim:
+                # Chave para o segmented_control
+                key_acum = "acum_mode_siconfi"
+
+                modo_acum = st.segmented_control(
+                    "Visualizar:",
+                    options=["Valor (Milhões R$)", "Variação (%)"],
+                    key=key_acum,
+                    selection_mode="single",
+                    on_change=callback_func,
+                    default="Valor (Milhões R$)",
+                )
+
+                if not modo_acum:
+                    modo_acum = "Valor (Milhões R$)"
+
+                bimestre_txt = BIMESTRE_MAP.get(ult_bim, f"{ult_bim}º Bim")
+
+                if modo_acum == "Variação (%)":
+                    df_plot = acum_var.sort_index(ascending=True)
+                    titulo_grafico = f"{indicador_siconfi_selecionado} no Acumulado até o Bimestre de {bimestre_txt} - Variação (%)"
+                    label_y = "Variação (%) em relação ao mesmo período do ano anterior"
+                    data_label_format = "+,.1f"
+                    hover_label_format = "+,.2f"
+
+                    titulo_centralizado(titulo_grafico, 5)
+
+                    if not df_plot.empty:
+                        fig = criar_grafico_barras(
+                            df=df_plot,
+                            titulo="",
+                            label_y=label_y,
+                            barmode="group",
+                            height=400,
+                            data_label_format=data_label_format,
+                            hover_label_format=hover_label_format,
+                            color_map=CORES_MUNICIPIOS,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Não há dados de variação disponíveis.")
+
+                else:  # Valor (Milhões R$)
+                    df_plot = acum_abs.sort_index(ascending=True)
+                    titulo_grafico = f"{indicador_siconfi_selecionado} no Acumulado até o Bimestre de {bimestre_txt}"
+
+                    titulo_centralizado(titulo_grafico, 5)
+
+                    st.markdown("**Valores Absolutos (Milhões R$)**")
+                    if not df_plot.empty:
+                        fig_abs = criar_grafico_barras(
+                            df=df_plot,
+                            titulo="",
+                            label_y="Milhões R$",
+                            barmode="group",
+                            height=400,
+                            data_label_format=",.1f",
+                            hover_label_format=",.2f",
+                            color_map=CORES_MUNICIPIOS,
+                        )
+                        st.plotly_chart(fig_abs, use_container_width=True)
+                    else:
+                        st.info("Sem dados disponíveis.")
+            else:
+                st.warning("Não há dados de acumulado disponíveis.")
 
 
 @st.cache_data

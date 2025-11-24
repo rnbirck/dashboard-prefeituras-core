@@ -837,6 +837,21 @@ def carregar_dados_educacao_ideb_escolas(municipios):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_educacao_saers(municipios, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_educacao_saers")
+        .select("*")
+        .in_("municipio", list(municipios))
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_saude_mensal(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")

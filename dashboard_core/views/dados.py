@@ -46,6 +46,7 @@ def show_page_dados(
     df_educacao_rendimento,
     df_educacao_ideb_municipio,
     df_educacao_ideb_escolas,
+    df_educacao_saers,
     # --- DataFrames da Página Saúde ---
     df_saude_mensal,
     df_saude_vacinas,
