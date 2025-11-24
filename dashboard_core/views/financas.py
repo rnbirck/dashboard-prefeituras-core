@@ -526,7 +526,6 @@ def display_siconfi_consolidado(df, expander_state_key, callback_func):
 
                     titulo_centralizado(titulo_grafico, 5)
 
-                    st.markdown("**Valores Absolutos (Milhões R$)**")
                     if not df_plot.empty:
                         fig_abs = criar_grafico_barras(
                             df=df_plot,
