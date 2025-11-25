@@ -6,21 +6,39 @@ from dashboard_core.utils import (
     criar_grafico_barras,
     checar_ult_ano_completo,
     titulo_centralizado,
+    style_saldo_variacao,  # Adicionado para estilizar a tabela
 )
 
 CORES_MUNICIPIOS = {}
 ANOS_DE_INTERESSE = []
+municipio_de_interesse = None  # Variável global para o município foco
 
 
-def set_saude_config(cores_municipios, anos_de_interesse):
+def set_saude_config(municipio, cores_municipios, anos_de_interesse):
     """
     Configura valores específicos do município que antes eram importados
     do dashboard_core.config. Deve ser chamado pelo app.py antes de
     renderizar a página de saude.
     """
-    global CORES_MUNICIPIOS, ANOS_DE_INTERESSE
+    global CORES_MUNICIPIOS, ANOS_DE_INTERESSE, municipio_de_interesse
+    municipio_de_interesse = municipio
     CORES_MUNICIPIOS = cores_municipios or {}
     ANOS_DE_INTERESSE = anos_de_interesse or []
+
+
+# --- FUNÇÕES AUXILIARES DE FORMATAÇÃO ---
+def formatar_valor_br(x):
+    """Formata número float para padrão BR (1.000.000) sem decimais."""
+    if pd.isna(x):
+        return "-"
+    return f"{x:,.0f}".replace(",", ".")
+
+
+def formatar_pct_br(x):
+    """Formata número float para percentual BR (+1,2%) com 1 casa decimal."""
+    if pd.isna(x):
+        return "-"
+    return f"{x:+,.1f}%".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 # --- FUNÇÕES DE CALLBACK ---
@@ -179,6 +197,65 @@ def preparar_dados_graficos_saude_mensal(
     return df_hist, df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
 
 
+# --- PREPARAÇÃO DE DADOS PARA TABELA DE ÓBITOS ---
+@st.cache_data
+def preparar_dados_obitos_tipo_tabela(df, municipio, anos_interesse=None):
+    """
+    Prepara a tabela dinâmica de óbitos por tipo para o município selecionado.
+    Retorna DF de Valores e DF de Variação Percentual.
+    """
+    if df.empty or not municipio:
+        return pd.DataFrame(), pd.DataFrame()
+
+    df_filt = df[df["municipio"] == municipio].copy()
+
+    if df_filt.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    # Verifica se as colunas necessárias existem
+    colunas_necessarias = [
+        "causa_basica",
+        "descricao_subcategoria",
+        "ano",
+        "num_obitos",
+    ]
+    if not all(col in df_filt.columns for col in colunas_necessarias):
+        return pd.DataFrame(), pd.DataFrame()
+
+    # Cria coluna combinada Causa + Descrição para facilitar leitura
+    df_filt["causa_completa"] = (
+        df_filt["causa_basica"] + " - " + df_filt["descricao_subcategoria"]
+    )
+    pivot_val = df_filt.pivot_table(
+        index="causa_completa",
+        columns="ano",
+        values="num_obitos",
+        aggfunc="sum",
+        fill_value=0,
+    )
+
+    # Ordena pelo último ano disponível com dados
+    if not pivot_val.empty:
+        ult_ano = pivot_val.columns.max()
+        pivot_val = pivot_val.sort_values(by=ult_ano, ascending=False)
+
+    # Calcula Variação Percentual (Ano X vs Ano X-1)
+    # pct_change faz (atual - anterior) / anterior
+    pivot_pct = pivot_val.pct_change(axis=1) * 100
+
+    # Filtra pelos anos de interesse
+    if anos_interesse:
+        colunas_interesse = [c for c in pivot_val.columns if c in anos_interesse]
+        pivot_val = pivot_val[colunas_interesse]
+        pivot_pct = pivot_pct[colunas_interesse]
+
+    # Renomeia o índice para "Causa Básica"
+    pivot_val.index.name = "Causa Básica"
+    pivot_pct.index.name = "Causa Básica"
+
+    return pivot_val, pivot_pct
+
+
 def preparar_dados_graficos_saude_anual(
     df_filtrado, coluna_selecionada, is_percentual=False, anos_visualizacao=None
 ):
@@ -194,7 +271,7 @@ def preparar_dados_graficos_saude_anual(
         fill_value=0,
     ).sort_index()
 
-    # Calcula variação (diferença para percentuais/coberturas, percentual para valores absolutos)
+    # Calcula variação
     if is_percentual:
         df_anual_var = df_anual_full.diff()
     else:
@@ -218,6 +295,7 @@ def display_saude_expander(
     key_prefix,
     expander_state_key,
     callback_func,
+    df_obitos_tipo=None,
 ):
     """Função genérica para exibir uma seção de indicadores de saúde."""
     if expander_state_key not in st.session_state:
@@ -231,6 +309,81 @@ def display_saude_expander(
             on_change=callback_func,
         )
 
+        # --- LÓGICA ESPECIAL PARA TABELA DE ÓBITOS POR TIPO ---
+        if indicador_selecionado == "Detalhamento de Óbitos por Causa Básica":
+            if df_obitos_tipo is None or df_obitos_tipo.empty:
+                st.warning("Dados detalhados de óbitos não disponíveis.")
+                return
+
+            titulo_centralizado(f"Detalhamento de Óbitos - {municipio_de_interesse}", 5)
+
+            # Preparação dos dados da tabela
+            df_val, df_pct = preparar_dados_obitos_tipo_tabela(
+                df_obitos_tipo, municipio_de_interesse, anos_interesse=ANOS_DE_INTERESSE
+            )
+
+            if df_val.empty:
+                st.info(
+                    f"Não há registros detalhados de óbitos para {municipio_de_interesse}."
+                )
+                return
+
+            # Controles da Tabela
+            col_busca, col_metric = st.columns([0.6, 0.4])
+            with col_busca:
+                texto_busca = st.text_input(
+                    "🔍 Pesquisar Causa:",
+                    placeholder="Ex: Neoplasia, Hipertensão",
+                    key=f"{key_prefix}_busca_obitos",
+                )
+            with col_metric:
+                modo_metrica = st.segmented_control(
+                    "Métrica:",
+                    options=["Nᵒ Óbitos", "Variação (%)"],
+                    selection_mode="single",
+                    default="Nᵒ Óbitos",
+                    key=f"{key_prefix}_metrica_obitos",
+                )
+                if not modo_metrica:
+                    modo_metrica = "Nᵒ Óbitos"
+
+            # Filtragem por busca
+            if texto_busca:
+                mask = df_val.index.str.contains(texto_busca, case=False, na=False)
+                df_val = df_val[mask]
+                df_pct = df_pct[mask]
+
+            # Seleção do DataFrame para exibição
+            if modo_metrica == "Nᵒ Óbitos":
+                df_show = df_val
+                formatter = formatar_valor_br
+                cmap = "Blues"
+                style_func = None
+            else:
+                df_show = df_pct
+                formatter = formatar_pct_br
+                cmap = None
+                style_func = style_saldo_variacao
+
+            # Renderização da Tabela
+            if not df_show.empty:
+                # Converte colunas (anos) para string para exibição limpa
+                df_show.columns = [str(c) for c in df_show.columns]
+
+                styler = df_show.style.format(formatter)
+
+                if cmap:
+                    styler = styler.background_gradient(cmap=cmap, axis=0)
+                if style_func:
+                    styler = styler.map(style_func)
+
+                st.dataframe(styler, height=400, use_container_width=True)
+            else:
+                st.warning("Nenhum registro encontrado para a busca.")
+
+            return  # Sai da função para não executar a lógica de gráfico padrão
+
+        # --- LÓGICA PADRÃO PARA GRÁFICOS ---
         coluna_selecionada, agg_method, label_y, data_format = dicionario_indicadores[
             indicador_selecionado
         ]
@@ -545,6 +698,7 @@ def show_page_saude(
     df_saude_despesas,
     df_saude_leitos,
     df_saude_medicos,
+    df_obitos_tipo=None,
 ):
     # 1. Inicialização dos estados dos expanders
     if "obitos_expander_state" not in st.session_state:
@@ -593,6 +747,12 @@ def show_page_saude(
             "mean",
             "Proporção (%)",
             ".1f",
+        ),
+        "Detalhamento de Óbitos por Causa Básica": (
+            None,
+            None,
+            None,
+            None,
         ),
     }
 
@@ -756,6 +916,7 @@ def show_page_saude(
         key_prefix="obitos",
         expander_state_key="obitos_expander_state",
         callback_func=obitos_callback,
+        df_obitos_tipo=df_obitos_tipo,  # Passando o DF de tipos de óbito
     )
 
     display_saude_expander(

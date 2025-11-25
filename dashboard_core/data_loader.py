@@ -911,6 +911,21 @@ def carregar_dados_saude_despesas(municipios, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_saude_obitos_tipo(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_saude_obitos_tipo")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_saude_leitos(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
