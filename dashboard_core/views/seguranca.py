@@ -10,6 +10,7 @@ from dashboard_core.utils import (
     checar_ult_ano_completo,
     criar_grafico_barras,
     titulo_centralizado,
+    style_saldo_variacao,
 )
 
 # --- VARIÁVEIS GLOBAIS DO MÓDULO ---
@@ -55,6 +56,10 @@ def mulher_callback():
 
 def drogas_callback():
     set_expander_open("drogas_expander_state")
+
+
+def furtos_callback():
+    set_expander_open("furtos_expander_state")
 
 
 # ==============================================================================
@@ -149,6 +154,70 @@ def preparar_dados_graficos_seguranca(
         ].sort_index(ascending=False)
 
     return df_hist, df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
+
+
+@st.cache_data
+def preparar_dados_furtos_por_tipo(df_furtos, anos_visualizacao):
+    """
+    Prepara os DataFrames para análise de furtos por tipo.
+    Retorna dados para Acumulado no Ano e Anual com valores absolutos e variação.
+    """
+    df_acum = pd.DataFrame()
+    df_acum_var = pd.DataFrame()
+    df_anual = pd.DataFrame()
+    df_anual_var = pd.DataFrame()
+    ult_ano, ult_mes = None, None
+
+    if df_furtos.empty:
+        return df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
+
+    # Determinar último ano e mês
+    df_range = df_furtos[df_furtos["ano"].isin(anos_visualizacao)]
+    if df_range.empty:
+        ult_ano = df_furtos["ano"].max()
+    else:
+        ult_ano = df_range["ano"].max()
+
+    ult_mes = df_furtos[df_furtos["ano"] == ult_ano]["mes"].max()
+
+    # 1. Acumulado no Ano (até o último mês disponível)
+    df_acum_temp = df_furtos[df_furtos["mes"] <= ult_mes]
+
+    df_acum_full = df_acum_temp.pivot_table(
+        index="ano",
+        columns="tipo_furtos",
+        values="n_furtos",
+        aggfunc="sum",
+        fill_value=0,
+    ).sort_index()
+
+    # Variação YoY para Acumulado
+    df_acum_var_full = df_acum_full.pct_change() * 100
+
+    # Filtrar anos
+    df_acum = df_acum_full[df_acum_full.index.isin(anos_visualizacao)]
+    df_acum_var = df_acum_var_full[df_acum_var_full.index.isin(anos_visualizacao)]
+
+    # 2. Anual (Anos Completos - bimestre 12)
+    ano_completo = checar_ult_ano_completo(df_furtos)
+    df_anual_temp = df_furtos[df_furtos["ano"] <= ano_completo]
+
+    df_anual_full = df_anual_temp.pivot_table(
+        index="ano",
+        columns="tipo_furtos",
+        values="n_furtos",
+        aggfunc="sum",
+        fill_value=0,
+    ).sort_index()
+
+    # Variação YoY para Anual
+    df_anual_var_full = df_anual_full.pct_change() * 100
+
+    # Filtrar anos
+    df_anual = df_anual_full[df_anual_full.index.isin(anos_visualizacao)]
+    df_anual_var = df_anual_var_full[df_anual_var_full.index.isin(anos_visualizacao)]
+
+    return df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
 
 
 def display_secao_seguranca(
@@ -435,7 +504,210 @@ def display_secao_seguranca(
                 st.plotly_chart(fig, use_container_width=True)
 
 
-def show_page_seguranca(df_seguranca, df_seguranca_taxa):
+def display_furtos_por_tipo(df_furtos, expander_state_key, callback_func):
+    """
+    Exibe análise de furtos por tipo em formato de tabela.
+    Mostra o tipo de furto nas linhas e anos nas colunas com valores absolutos ou variação.
+    """
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander("Furtos por Tipo", expanded=st.session_state[expander_state_key]):
+        if df_furtos.empty:
+            st.warning("Não há dados de furtos por tipo disponíveis.")
+            return
+
+        # Preparar dados
+        (
+            df_acum,
+            df_acum_var,
+            df_anual,
+            df_anual_var,
+            ult_ano,
+            ult_mes,
+        ) = preparar_dados_furtos_por_tipo(df_furtos, anos_de_interesse)
+
+        # Navegação entre abas
+        key_main_tab = "main_tab_nav_furtos"
+        if key_main_tab not in st.session_state:
+            st.session_state[key_main_tab] = "Acumulado no Ano"
+
+        aba_selecionada = st.pills(
+            "Selecione o tipo de análise temporal:",
+            options=["Acumulado no Ano", "Anual"],
+            selection_mode="single",
+            key=key_main_tab,
+        )
+
+        if not aba_selecionada:
+            aba_selecionada = "Acumulado no Ano"
+
+        # --- ABA 1: ACUMULADO NO ANO ---
+        if aba_selecionada == "Acumulado no Ano":
+            # Segmented control para métrica
+            key_acum = "acum_mode_furtos"
+
+            modo_acum = st.segmented_control(
+                "Visualizar:",
+                options=["Número de Furtos", "Variação (%)"],
+                key=key_acum,
+                selection_mode="single",
+                on_change=callback_func,
+                default="Número de Furtos",
+            )
+
+            if not modo_acum:
+                modo_acum = "Número de Furtos"
+
+            # Preparar tabela de valores (sempre necessária para ordenação)
+            if not df_acum.empty:
+                # Determinar o último ano dos dados (antes do transpose)
+                ultimo_ano_dados = df_acum.index.max()  # Pega o último ano numérico
+
+                # Ordenar por tipo de furto baseado no último ano (usando df original)
+                df_ordenado = df_acum.loc[ultimo_ano_dados].sort_values(ascending=False)
+                ordem_index = df_ordenado.index  # Ordem dos tipos de furto
+
+                # Transpor e reindexar pela ordem correta
+                df_tabela_valores = df_acum.T.reindex(ordem_index)
+                df_tabela_valores.index.name = "Tipo de Furto"
+
+                # Formatar as colunas
+                df_tabela_valores.columns = [
+                    f"Jan-{MESES_DIC[ult_mes][:3]}/{str(ano)[-2:]}"
+                    for ano in df_tabela_valores.columns
+                ]
+
+            if modo_acum == "Variação (%)":
+                titulo_grafico = f"Furtos por Tipo - Acumulado até {MESES_DIC.get(ult_mes, ult_mes)} - Variação (%)"
+                titulo_centralizado(titulo_grafico, 5)
+
+                if not df_acum_var.empty:
+                    # Transpor para ter tipos de furto nas linhas e anos nas colunas
+                    df_tabela = df_acum_var.T
+                    df_tabela.index.name = "Tipo de Furto"
+
+                    # Formatar índice das colunas para incluir período
+                    df_tabela.columns = [
+                        f"Jan-{MESES_DIC[ult_mes][:3]}/{str(ano)[-2:]}"
+                        for ano in df_tabela.columns
+                    ]
+
+                    # Reindexar pela ordem dos valores (não da variação)
+                    df_tabela = df_tabela.reindex(ordem_index)
+
+                    # Remover colunas que são totalmente NaN (primeiro ano sem dados anteriores)
+                    df_tabela = df_tabela.dropna(axis=1, how="all")
+
+                    # Estilizar tabela
+                    styler = df_tabela.style.format("{:+.1f}%").map(
+                        style_saldo_variacao
+                    )
+                    st.dataframe(styler, width="stretch")
+                else:
+                    st.info("Não há dados de variação disponíveis.")
+
+            else:  # Número de Furtos
+                titulo_grafico = (
+                    f"Furtos por Tipo - Acumulado até {MESES_DIC.get(ult_mes, ult_mes)}"
+                )
+                titulo_centralizado(titulo_grafico, 5)
+
+                if not df_acum.empty:
+                    # Usar a tabela já preparada e ordenada
+                    df_tabela = df_tabela_valores
+
+                    # Estilizar tabela
+                    styler = df_tabela.style.format(
+                        formatar_valor_br
+                    ).background_gradient(cmap="Blues", axis=0)
+                    st.dataframe(styler, width="stretch")
+                else:
+                    st.info("Sem dados disponíveis.")
+
+        # --- ABA 2: ANUAL ---
+        elif aba_selecionada == "Anual":
+            if not df_anual.empty:
+                # Segmented control para métrica
+                key_anual = "anual_mode_furtos"
+
+                modo_anual = st.segmented_control(
+                    "Visualizar:",
+                    options=["Número de Furtos", "Variação (%)"],
+                    key=key_anual,
+                    selection_mode="single",
+                    on_change=callback_func,
+                    default="Número de Furtos",
+                )
+
+                if not modo_anual:
+                    modo_anual = "Número de Furtos"
+
+                # Preparar tabela de valores (sempre necessária para ordenação)
+                # Determinar o último ano dos dados (antes do transpose)
+                ultimo_ano_dados = df_anual.index.max()  # Pega o último ano numérico
+
+                # Ordenar por tipo de furto baseado no último ano (usando df original)
+                df_ordenado = df_anual.loc[ultimo_ano_dados].sort_values(
+                    ascending=False
+                )
+                ordem_index = df_ordenado.index  # Ordem dos tipos de furto
+
+                # Transpor e reindexar pela ordem correta
+                df_tabela_valores = df_anual.T.reindex(ordem_index)
+                df_tabela_valores.index.name = "Tipo de Furto"
+
+                # Formatar as colunas
+                df_tabela_valores.columns = [
+                    str(ano) for ano in df_tabela_valores.columns
+                ]
+
+                if modo_anual == "Variação (%)":
+                    titulo_grafico = "Furtos por Tipo - Evolução Anual - Variação (%)"
+                    titulo_centralizado(titulo_grafico, 5)
+
+                    if not df_anual_var.empty:
+                        # Transpor para ter tipos de furto nas linhas e anos nas colunas
+                        df_tabela = df_anual_var.T
+                        df_tabela.index.name = "Tipo de Furto"
+
+                        # Formatar índice das colunas (apenas ano)
+                        df_tabela.columns = [str(ano) for ano in df_tabela.columns]
+
+                        # Reindexar pela ordem dos valores (não da variação)
+                        df_tabela = df_tabela.reindex(ordem_index)
+
+                        # Remover colunas que são totalmente NaN (primeiro ano sem dados anteriores)
+                        df_tabela = df_tabela.dropna(axis=1, how="all")
+
+                        # Estilizar tabela
+                        styler = df_tabela.style.format("{:+.1f}%").map(
+                            style_saldo_variacao
+                        )
+                        st.dataframe(styler, width="stretch")
+                    else:
+                        st.info("Não há dados de variação disponíveis.")
+
+                else:  # Número de Furtos
+                    titulo_grafico = "Furtos por Tipo - Evolução Anual"
+                    titulo_centralizado(titulo_grafico, 5)
+
+                    if not df_anual.empty:
+                        # Usar a tabela já preparada e ordenada
+                        df_tabela = df_tabela_valores
+
+                        # Estilizar tabela
+                        styler = df_tabela.style.format(
+                            formatar_valor_br
+                        ).background_gradient(cmap="Blues", axis=0)
+                        st.dataframe(styler, width="stretch")
+                    else:
+                        st.info("Sem dados disponíveis.")
+            else:
+                st.warning("Não há dados anuais completos disponíveis.")
+
+
+def show_page_seguranca(df_seguranca, df_seguranca_taxa, df_seguranca_furtos):
     # Inicialização dos estados dos expanders
     if "geral_expander_state" not in st.session_state:
         st.session_state.geral_expander_state = False
@@ -443,6 +715,8 @@ def show_page_seguranca(df_seguranca, df_seguranca_taxa):
         st.session_state.mulher_expander_state = False
     if "drogas_expander_state" not in st.session_state:
         st.session_state.drogas_expander_state = False
+    if "furtos_expander_state" not in st.session_state:
+        st.session_state.furtos_expander_state = False
 
     titulo_centralizado("Dashboard de Segurança", 1)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
@@ -499,4 +773,9 @@ def show_page_seguranca(df_seguranca, df_seguranca_taxa):
         "drogas",
         "drogas_expander_state",
         drogas_callback,
+    )
+    display_furtos_por_tipo(
+        df_seguranca_furtos,
+        "furtos_expander_state",
+        furtos_callback,
     )
