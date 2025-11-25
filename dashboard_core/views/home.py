@@ -23,6 +23,7 @@ def show_page_home(
     df_empresas,
     df_educacao_matriculas,
     df_educacao_ideb,
+    df_educacao_saers,
     df_vinculos,
     df_pib,
     df_saude_mensal,
@@ -155,6 +156,11 @@ def show_page_home(
         data_matriculas, data_ideb = "Não disponível", "Não disponível"
 
     try:
+        data_saers = str(int(df_educacao_saers["ano"].max()))
+    except Exception:
+        data_saers = "Não disponível"
+
+    try:
         data_pib = str(int(df_pib["ano"].max()))
     except Exception:
         data_pib = "Não disponível"
@@ -256,11 +262,11 @@ def show_page_home(
         st.markdown(
             f"""
             #### 🎓 Educação
-            Consolida indicadores educacionais do **Censo Escolar** e do **INEP (IDEB)**, incluindo matrículas, docentes, turmas, taxas de rendimento e notas de avaliação do SAEB.
+            Consolida indicadores educacionais do **Censo Escolar**, do **INEP (IDEB)** e do **SAERS (RS)**, incluindo matrículas, docentes, turmas, taxas de rendimento, notas de avaliação e níveis de proficiência.
             
-            *Frequência: **Anual (Censo)** e **Bienal (IDEB)*** 
+            *Frequência: **Anual (Censo/SAERS)** e **Bienal (IDEB)*** 
             
-            *Últimos dados: **Censo:** **{data_matriculas}** | **IDEB:** **{data_ideb}***
+            *Últimos dados: **Censo:** **{data_matriculas}** | **IDEB:** **{data_ideb}** | **SAERS:** **{data_saers}***
             """
         )
         st.button(

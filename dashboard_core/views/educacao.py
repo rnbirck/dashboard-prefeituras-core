@@ -1,5 +1,7 @@
 import pandas as pd
 import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
 
 from dashboard_core.utils import (
     criar_grafico_barras,
@@ -8,6 +10,17 @@ from dashboard_core.utils import (
 
 CORES_MUNICIPIOS = {}
 anos_de_interesse = []
+
+# Cores para os níveis de proficiência (padrão semáforo)
+CORES_NIVEIS_SAERS = {
+    "Abaixo do Básico": "#d32f2f",  # Vermelho
+    "Básico": "#f57c00",  # Laranja
+    "Adequado": "#7cb342",  # Verde Claro
+    "Avançado": "#2e7d32",  # Verde Escuro
+}
+
+# Ordem lógica dos níveis para o gráfico
+ORDEM_NIVEIS = ["Abaixo do Básico", "Básico", "Adequado", "Avançado"]
 
 
 def set_educacao_config(cores_municipios, anos_interesse):
@@ -56,6 +69,10 @@ def ideb_mun_callback():
 
 def ideb_escolas_callback():
     set_expander_open("ideb_escolas_expander_state")
+
+
+def saers_callback():
+    set_expander_open("saers_expander_state")
 
 
 @st.cache_data
@@ -169,6 +186,64 @@ def preparar_dados_tabela_ideb_escolas(df, categoria, dependencia):
     ).sort_values(by="nota_media", ascending=False)
 
     return df_tab
+
+
+@st.cache_data
+def preparar_dados_saers_stacked(df, ano_escolar, disciplina, municipios_selecionados):
+    """
+    Transforma as colunas wide do SAERS em formato long para gráfico empilhado (stacked).
+    """
+    # Mapeamento de Ano Escolar para o sufixo da coluna
+    mapa_ano = {"2º Ano": "2_ano", "5º Ano": "5_ano", "9º Ano": "9_ano"}
+
+    # Mapeamento de Disciplina para o sufixo da coluna
+    mapa_disc = {"Português": "portugues", "Matemática": "matematica"}
+
+    sufixo_ano = mapa_ano.get(ano_escolar)
+    sufixo_disc = mapa_disc.get(disciplina)
+
+    if not sufixo_ano or not sufixo_disc:
+        return pd.DataFrame()
+
+    # Construção dos nomes das colunas baseados na query SQL fornecida
+    # Ex: percent_5_ano_portugues_avancado
+    cols_map = {
+        f"percent_{sufixo_ano}_{sufixo_disc}_abaixo_basico": "Abaixo do Básico",
+        f"percent_{sufixo_ano}_{sufixo_disc}_basico": "Básico",
+        f"percent_{sufixo_ano}_{sufixo_disc}_adequado": "Adequado",
+        f"percent_{sufixo_ano}_{sufixo_disc}_avancado": "Avançado",
+    }
+
+    # Filtrar Municípios e Anos
+    df_filt = df[df["municipio"].isin(municipios_selecionados)].copy()
+
+    if df_filt.empty:
+        return pd.DataFrame()
+
+    # Selecionar apenas colunas relevantes + identificadores
+    cols_to_keep = ["ano", "municipio"] + list(cols_map.keys())
+
+    # Verifica se as colunas existem (caso falte algum dado no CSV)
+    cols_existentes = [c for c in cols_to_keep if c in df_filt.columns]
+    df_filt = df_filt[cols_existentes]
+
+    # Melt (Transformar em formato longo)
+    df_long = df_filt.melt(
+        id_vars=["ano", "municipio"],
+        value_vars=[c for c in cols_map.keys() if c in df_filt.columns],
+        var_name="coluna_origem",
+        value_name="percentual",
+    )
+
+    # Mapear o nome da coluna para o nome legível do nível
+    df_long["nivel"] = df_long["coluna_origem"].map(cols_map)
+
+    # Ordenar para garantir que o gráfico empilhado siga a lógica (Abaixo -> Avançado)
+    df_long["nivel"] = pd.Categorical(
+        df_long["nivel"], categories=ORDEM_NIVEIS, ordered=True
+    )
+
+    return df_long.sort_values(["municipio", "ano", "nivel"])
 
 
 def display_educacao(
@@ -506,11 +581,123 @@ def display_ideb_escolas(
         st.dataframe(df_tab_renomeado, width="stretch")
 
 
+def display_saers(
+    df_saers,
+    municipios_selecionados,
+    expander_state_key,
+    callback_func,
+):
+    """
+    Exibe a seção do SAERS com gráfico de barras empilhadas para distribuição de proficiência.
+    """
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(
+        "SAERS (Sistema de Avaliação do Rendimento Escolar do RS)",
+        expanded=st.session_state[expander_state_key],
+    ):
+        titulo_centralizado("Resultados do SAERS por Nível de Proficiência", 5)
+
+        # Filtro de Ano Escolar (Pills)
+        key_ano = "saers_ano_escolar"
+        if key_ano not in st.session_state:
+            st.session_state[key_ano] = "5º Ano"
+
+        ano_escolar = st.pills(
+            "Ano Escolar:",
+            options=["2º Ano", "5º Ano", "9º Ano"],
+            selection_mode="single",
+            key=key_ano,
+            on_change=callback_func,
+        )
+        if not ano_escolar:
+            ano_escolar = "5º Ano"  # Fallback
+
+        # Filtro de Disciplina (Segmented Control)
+        key_disc = "saers_disciplina"
+        if key_disc not in st.session_state:
+            st.session_state[key_disc] = "Português"
+
+        disciplina = st.segmented_control(
+            "Disciplina:",
+            options=["Português", "Matemática"],
+            selection_mode="single",
+            key=key_disc,
+            on_change=callback_func,
+        )
+        if not disciplina:
+            disciplina = "Português"  # Fallback
+
+        # Preparar dados
+        df_plot = preparar_dados_saers_stacked(
+            df_saers, ano_escolar, disciplina, municipios_selecionados
+        )
+
+        if not df_plot.empty:
+            # Gráfico de Barras Empilhadas
+
+            titulo_graf = f"Distribuição de Proficiência - {ano_escolar} - {disciplina}"
+            titulo_centralizado(titulo_graf, 5)
+
+            fig = px.bar(
+                df_plot,
+                x="municipio",
+                y="percentual",
+                color="nivel",
+                barmode="relative",
+                facet_col="ano",
+                category_orders={"nivel": ORDEM_NIVEIS},
+                color_discrete_map=CORES_NIVEIS_SAERS,
+                text_auto=".0f",
+                height=500,
+            )
+
+            # Renomear títulos dos facets (remover "ano=") e mover para baixo
+            fig.for_each_annotation(
+                lambda a: a.update(text=a.text.split("=")[-1], y=-0.15)
+            )
+
+            fig.update_layout(
+                title="",
+                xaxis_title="",
+                yaxis_title="Percentual de Alunos (%)",
+                legend_title="Nível de Proficiência",
+                hovermode="x unified",
+                showlegend=True,
+                margin=dict(l=20, r=20, t=50, b=80),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.01,
+                    xanchor="center",
+                    x=0.5,
+                ),
+            )
+
+            # Remover título "municipio" dos eixos X
+            fig.update_xaxes(title_text="")
+
+            # Ajuste para mostrar rótulos e eixos corretamente
+            fig.update_traces(
+                textfont_size=12,
+                textangle=0,
+                textposition="inside",
+                hovertemplate="<b>%{data.name}</b><br>Percentual: %{y:.1f}%<extra></extra>",
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        else:
+            st.warning("Dados não disponíveis para a seleção atual.")
+
+
 def show_page_educacao(
     df_matriculas,
     df_rendimento,
     df_ideb_municipio,
     df_ideb_escolas,
+    df_saers,
     municipios_selecionados_global,
 ):
     # 1. INICIALIZAÇÃO DOS ESTADOS DOS EXPANDERS (Fechados por padrão)
@@ -528,6 +715,8 @@ def show_page_educacao(
         st.session_state.ideb_mun_expander_state = False
     if "ideb_escolas_expander_state" not in st.session_state:
         st.session_state.ideb_escolas_expander_state = False
+    if "saers_expander_state" not in st.session_state:
+        st.session_state.saers_expander_state = False
 
     titulo_centralizado("Dashboard de Educação", 1)
 
@@ -721,4 +910,14 @@ def show_page_educacao(
         key_prefix="ideb_escolas",
         expander_state_key="ideb_escolas_expander_state",
         callback_func=ideb_escolas_callback,
+    )
+
+    st.markdown("###### SAERS - RS")
+
+    # 8. SAERS
+    display_saers(
+        df_saers=df_saers,
+        municipios_selecionados=municipios_selecionados_global,
+        expander_state_key="saers_expander_state",
+        callback_func=saers_callback,
     )
