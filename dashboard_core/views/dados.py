@@ -3,6 +3,8 @@ from dashboard_core.utils import to_excel, titulo_centralizado
 
 
 def show_page_dados(
+    # --- DataFrame da Página Administração Pública ---
+    df_adm_publica,
     # --- DataFrames da Página Emprego ---
     df_caged,
     df_caged_cnae,
@@ -72,7 +74,22 @@ def show_page_dados(
         "Utilize os menus expansíveis abaixo para baixar os arquivos excel com os dados brutos do dashboard."
     )
 
-    # 1. ASSISTÊNCIA SOCIAL
+    # 1. ADMINISTRAÇÃO PÚBLICA
+    with st.expander("Dados da Página: Administração Pública"):
+        st.subheader("Dados da Administração Pública")
+        st.markdown(
+            "Dados anuais de vínculos empregatícios na administração pública municipal (direta e indireta)."
+        )
+
+        st.download_button(
+            label="📥 Vínculos na Administração Pública",
+            data=to_excel(df_adm_publica),
+            file_name="adm_publica_vinculos_municipios.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+
+    # 2. ASSISTÊNCIA SOCIAL
     with st.expander("Dados da Página: Assistência Social"):
         st.subheader("Dados da Assistência Social")
         st.markdown(
@@ -97,7 +114,7 @@ def show_page_dados(
                 use_container_width=True,
             )
 
-    # 2. COMÉRCIO EXTERIOR
+    # 3. COMÉRCIO EXTERIOR
     with st.expander("Dados da Página: Comércio Exterior"):
         st.subheader("Dados de Exportação")
         st.markdown(
@@ -153,7 +170,7 @@ def show_page_dados(
                 use_container_width=True,
             )
 
-    # 3. DEMOGRAFIA
+    # 4. DEMOGRAFIA
     with st.expander("Dados da Página: Demografia"):
         st.subheader("Dados Demográficos")
         st.markdown(
@@ -191,7 +208,7 @@ def show_page_dados(
                 use_container_width=True,
             )
 
-    # 4. EDUCAÇÃO
+    # 5. EDUCAÇÃO
     with st.expander("Dados da Página: Educação"):
         st.subheader("Dados da Educação")
         st.markdown(
@@ -237,7 +254,7 @@ def show_page_dados(
                 use_container_width=True,
             )
 
-    # 5. EMPREGO
+    # 6. EMPREGO
     with st.expander("Dados da Página: Emprego"):
         st.subheader("Dados de Saldo de Emprego (CAGED)")
         st.markdown(
@@ -365,7 +382,7 @@ def show_page_dados(
                 use_container_width=True,
             )
 
-    # 6. EMPRESAS
+    # 7. EMPRESAS
     with st.expander("Dados da Página: Empresas"):
         st.subheader("Dados de CNPJ Ativos")
         st.markdown("Dados mensais de CNPJs ativos por município e categorias.")
@@ -466,7 +483,7 @@ def show_page_dados(
                 use_container_width=True,
             )
 
-    # 7. FINANÇAS
+    # 8. FINANÇAS
     with st.expander("Dados da Página: Finanças"):
         st.subheader("Dados de Finanças Públicas")
         st.markdown(
@@ -507,7 +524,7 @@ def show_page_dados(
             else:
                 st.write("")
 
-    # 8. PIB
+    # 9. PIB
     with st.expander("Dados da Página: PIB"):
         st.subheader("Dados do PIB")
         st.markdown("Dados anuais do Produto Interno Bruto municipal (PIB).")
@@ -526,7 +543,7 @@ def show_page_dados(
         with col_pib_2:
             st.write("")
 
-    # 9. SAÚDE
+    # 10. SAÚDE
     with st.expander("Dados da Página: Saúde"):
         st.subheader("Dados da Saúde")
         st.markdown(
@@ -594,7 +611,7 @@ def show_page_dados(
                 use_container_width=True,
             )
 
-    # 10. SEGURANÇA
+    # 11. SEGURANÇA
     with st.expander("Dados da Página: Segurança"):
         st.subheader("Dados da Secretaria da Segurança Pública")
         st.markdown(

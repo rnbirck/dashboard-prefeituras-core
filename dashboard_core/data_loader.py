@@ -59,6 +59,21 @@ def carregar_pdf_indicadores_financeiros():
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_adm_publica(municipios, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_adm_publica")
+        .select("*")
+        .in_("municipio", list(municipios))
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_indicadores_financeiros(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")

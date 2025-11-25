@@ -12,6 +12,7 @@ def go_to_page(page_name):
 
 
 def show_page_home(
+    df_adm_publica,
     df_emprego,
     df_estoque,
     df_comex,
@@ -84,6 +85,11 @@ def show_page_home(
 
     st.markdown("---")
     st.subheader("📂 Sobre as Páginas e Atualizações")
+
+    try:
+        data_adm_publica = str(int(df_adm_publica["ano"].max()))
+    except Exception:
+        data_adm_publica = "Não disponível"
 
     try:
         ult_ano_emprego = df_emprego["ano"].max()
@@ -189,6 +195,24 @@ def show_page_home(
     # --- COLUNA A ---
     # Ordem Alfabética: Assistência Social, Comércio Exterior, Dados, Demografia, Educação
     with col_a:
+        st.markdown(
+            f"""
+            #### 🏛️ Administração Pública
+            Apresenta a distribuição de vínculos empregatícios na administração pública municipal, incluindo servidores **estatutários**, **celetistas**, **comissionados** e outros, na administração **direta** e **indireta**. Dados da **Pesquisa de Informações Básicas Municipais (MUNIC/IBGE)**.
+            
+            *Frequência: **Anual*** 
+            
+            *Últimos dados: **{data_adm_publica}***
+            """
+        )
+        st.button(
+            "Explorar Administração Pública ➔",
+            on_click=go_to_page,
+            args=("Administração Pública",),
+            key="btn_home_adm_publica",
+        )
+        st.markdown("---")
+
         st.markdown(
             f"""
             #### ❤️ Assistência Social
