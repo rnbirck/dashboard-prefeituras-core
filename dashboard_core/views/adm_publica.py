@@ -230,7 +230,7 @@ def display_adm_publica_expander(df, expander_state_key, callback_func):
             )
 
             # 5. Configurar variáveis baseadas no modo selecionado
-            if modo_view == "Absoluto":
+            if modo_view == "Vínculos Totais":
                 coluna_texto = "texto_abs"
                 barnorm_param = ""
                 y_title = "Quantidade de Servidores"
