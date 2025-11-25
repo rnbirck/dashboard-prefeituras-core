@@ -229,6 +229,13 @@ def show_page_dados(
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
+            st.download_button(
+                label="📥 SAERS (Avaliação do RS)",
+                data=to_excel(df_educacao_saers),
+                file_name="educacao_saers.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
 
     # 5. EMPREGO
     with st.expander("Dados da Página: Emprego"):
