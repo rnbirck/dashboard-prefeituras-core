@@ -33,7 +33,7 @@ else:
 
 # FUNÇÕES AUXILIARES E CACHE
 
-CACHE_TTL = 172800  # 48 horas
+CACHE_TTL = None  # Infinito
 
 
 def construir_url_gdrive_download(file_id):
