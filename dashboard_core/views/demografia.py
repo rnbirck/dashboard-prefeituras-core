@@ -329,7 +329,7 @@ def show_page_demografia(df_populacao_densidade, df_populacao_sexo_idade):
     if "demografia_piramide_expander" not in st.session_state:
         st.session_state.demografia_piramide_expander = False
 
-    titulo_centralizado("Dashboard de Demográfia", 1)
+    titulo_centralizado("Dashboard de Demografia", 1)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
 
     with st.expander(

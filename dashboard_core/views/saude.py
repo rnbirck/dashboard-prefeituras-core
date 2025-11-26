@@ -87,6 +87,10 @@ def leitos_callback():
     set_expander_open("leitos_expander_state")
 
 
+def obitos_causa_basica_callback():
+    set_expander_open("obitos_causa_basica_expander_state")
+
+
 def preparar_dados_graficos_saude_mensal(
     df_filtrado, coluna_selecionada, metodo_agg="sum", anos_visualizacao=None
 ):
@@ -288,6 +292,90 @@ def preparar_dados_graficos_saude_anual(
     return df_anual, df_anual_var
 
 
+def display_obitos_causa_basica_expander(
+    df_obitos_tipo,
+    expander_state_key,
+    callback_func,
+):
+    """Função dedicada para exibir o detalhamento de óbitos por causa básica."""
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(
+        "Detalhamento de Óbitos por Causa Básica",
+        expanded=st.session_state[expander_state_key],
+    ):
+        if df_obitos_tipo is None or df_obitos_tipo.empty:
+            st.warning("Dados detalhados de óbitos não disponíveis.")
+            return
+
+        titulo_centralizado(f"Detalhamento de Óbitos - {municipio_de_interesse}", 5)
+
+        # Preparação dos dados da tabela
+        df_val, df_pct = preparar_dados_obitos_tipo_tabela(
+            df_obitos_tipo, municipio_de_interesse, anos_interesse=ANOS_DE_INTERESSE
+        )
+
+        if df_val.empty:
+            st.info(
+                f"Não há registros detalhados de óbitos para {municipio_de_interesse}."
+            )
+            return
+
+        # Controles da Tabela
+        col_busca, col_metric = st.columns([0.6, 0.4])
+        with col_busca:
+            texto_busca = st.text_input(
+                "🔍 Pesquisar Causa:",
+                placeholder="Ex: Neoplasia, Hipertensão",
+                key="obitos_causa_basica_busca",
+            )
+        with col_metric:
+            modo_metrica = st.segmented_control(
+                "Métrica:",
+                options=["Nᵒ Óbitos", "Variação (%)"],
+                selection_mode="single",
+                default="Nᵒ Óbitos",
+                key="obitos_causa_basica_metrica",
+            )
+            if not modo_metrica:
+                modo_metrica = "Nᵒ Óbitos"
+
+        # Filtragem por busca
+        if texto_busca:
+            mask = df_val.index.str.contains(texto_busca, case=False, na=False)
+            df_val = df_val[mask]
+            df_pct = df_pct[mask]
+
+        # Seleção do DataFrame para exibição
+        if modo_metrica == "Nᵒ Óbitos":
+            df_show = df_val
+            formatter = formatar_valor_br
+            cmap = "Blues"
+            style_func = None
+        else:
+            df_show = df_pct
+            formatter = formatar_pct_br
+            cmap = None
+            style_func = style_saldo_variacao
+
+        # Renderização da Tabela
+        if not df_show.empty:
+            # Converte colunas (anos) para string para exibição limpa
+            df_show.columns = [str(c) for c in df_show.columns]
+
+            styler = df_show.style.format(formatter)
+
+            if cmap:
+                styler = styler.background_gradient(cmap=cmap, axis=0)
+            if style_func:
+                styler = styler.map(style_func)
+
+            st.dataframe(styler, height=400, use_container_width=True)
+        else:
+            st.warning("Nenhum registro encontrado para a busca.")
+
+
 def display_saude_expander(
     df_filtrado,
     titulo_expander,
@@ -295,7 +383,6 @@ def display_saude_expander(
     key_prefix,
     expander_state_key,
     callback_func,
-    df_obitos_tipo=None,
 ):
     """Função genérica para exibir uma seção de indicadores de saúde."""
     if expander_state_key not in st.session_state:
@@ -308,80 +395,6 @@ def display_saude_expander(
             key=f"{key_prefix}_selectbox",
             on_change=callback_func,
         )
-
-        # --- LÓGICA ESPECIAL PARA TABELA DE ÓBITOS POR TIPO ---
-        if indicador_selecionado == "Detalhamento de Óbitos por Causa Básica":
-            if df_obitos_tipo is None or df_obitos_tipo.empty:
-                st.warning("Dados detalhados de óbitos não disponíveis.")
-                return
-
-            titulo_centralizado(f"Detalhamento de Óbitos - {municipio_de_interesse}", 5)
-
-            # Preparação dos dados da tabela
-            df_val, df_pct = preparar_dados_obitos_tipo_tabela(
-                df_obitos_tipo, municipio_de_interesse, anos_interesse=ANOS_DE_INTERESSE
-            )
-
-            if df_val.empty:
-                st.info(
-                    f"Não há registros detalhados de óbitos para {municipio_de_interesse}."
-                )
-                return
-
-            # Controles da Tabela
-            col_busca, col_metric = st.columns([0.6, 0.4])
-            with col_busca:
-                texto_busca = st.text_input(
-                    "🔍 Pesquisar Causa:",
-                    placeholder="Ex: Neoplasia, Hipertensão",
-                    key=f"{key_prefix}_busca_obitos",
-                )
-            with col_metric:
-                modo_metrica = st.segmented_control(
-                    "Métrica:",
-                    options=["Nᵒ Óbitos", "Variação (%)"],
-                    selection_mode="single",
-                    default="Nᵒ Óbitos",
-                    key=f"{key_prefix}_metrica_obitos",
-                )
-                if not modo_metrica:
-                    modo_metrica = "Nᵒ Óbitos"
-
-            # Filtragem por busca
-            if texto_busca:
-                mask = df_val.index.str.contains(texto_busca, case=False, na=False)
-                df_val = df_val[mask]
-                df_pct = df_pct[mask]
-
-            # Seleção do DataFrame para exibição
-            if modo_metrica == "Nᵒ Óbitos":
-                df_show = df_val
-                formatter = formatar_valor_br
-                cmap = "Blues"
-                style_func = None
-            else:
-                df_show = df_pct
-                formatter = formatar_pct_br
-                cmap = None
-                style_func = style_saldo_variacao
-
-            # Renderização da Tabela
-            if not df_show.empty:
-                # Converte colunas (anos) para string para exibição limpa
-                df_show.columns = [str(c) for c in df_show.columns]
-
-                styler = df_show.style.format(formatter)
-
-                if cmap:
-                    styler = styler.background_gradient(cmap=cmap, axis=0)
-                if style_func:
-                    styler = styler.map(style_func)
-
-                st.dataframe(styler, height=400, use_container_width=True)
-            else:
-                st.warning("Nenhum registro encontrado para a busca.")
-
-            return  # Sai da função para não executar a lógica de gráfico padrão
 
         # --- LÓGICA PADRÃO PARA GRÁFICOS ---
         coluna_selecionada, agg_method, label_y, data_format = dicionario_indicadores[
@@ -719,6 +732,8 @@ def show_page_saude(
         st.session_state.medicos_expander_state = False
     if "leitos_expander_state" not in st.session_state:
         st.session_state.leitos_expander_state = False
+    if "obitos_causa_basica_expander_state" not in st.session_state:
+        st.session_state.obitos_causa_basica_expander_state = False
 
     titulo_centralizado("Dashboard de Saúde", 1)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
@@ -747,12 +762,6 @@ def show_page_saude(
             "mean",
             "Proporção (%)",
             ".1f",
-        ),
-        "Detalhamento de Óbitos por Causa Básica": (
-            None,
-            None,
-            None,
-            None,
         ),
     }
 
@@ -916,7 +925,6 @@ def show_page_saude(
         key_prefix="obitos",
         expander_state_key="obitos_expander_state",
         callback_func=obitos_callback,
-        df_obitos_tipo=df_obitos_tipo,  # Passando o DF de tipos de óbito
     )
 
     display_saude_expander(
@@ -956,6 +964,12 @@ def show_page_saude(
     )
 
     st.markdown("###### Indicadores Anuais de Saúde")
+
+    display_obitos_causa_basica_expander(
+        df_obitos_tipo=df_obitos_tipo,
+        expander_state_key="obitos_causa_basica_expander_state",
+        callback_func=obitos_causa_basica_callback,
+    )
 
     display_saude_anual_expander(
         df_filtrado=df_saude_despesas,

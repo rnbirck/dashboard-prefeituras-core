@@ -55,6 +55,7 @@ def show_page_dados(
     df_saude_despesas,
     df_saude_leitos,
     df_saude_medicos,
+    df_saude_obitos_tipo,
     # --- DataFrame da Página PIB ---
     df_pib_municipios,
     # --- DataFrames da Página Demografia ---
@@ -545,14 +546,8 @@ def show_page_dados(
 
     # 10. SAÚDE
     with st.expander("Dados da Página: Saúde"):
-        st.subheader("Dados da Saúde")
-        st.markdown(
-            "Dados mensais e anuais de mortalidade, nascimentos, atenção básica, vacinação, médicos e leitos por município."
-        )
-        st.divider()
-
         # --- DADOS MENSAIS ---
-        st.subheader("Dados Mensais")
+        st.subheader("Dados Mensais de Saúde")
         st.markdown(
             "Indicadores atualizados mensalmente (ex.: óbitos, nascimentos, atenção básica, internações)."
         )
@@ -573,7 +568,7 @@ def show_page_dados(
         st.divider()
 
         # --- DADOS ANUAIS ---
-        st.subheader("Dados Anuais")
+        st.subheader("Dados Anuais de Saúde")
         st.markdown(
             "Indicadores com atualização anual (ex.: despesas, imunização agregada, médicos e leitos)."
         )
@@ -607,6 +602,13 @@ def show_page_dados(
                 label="📥 Médicos do SUS",
                 data=to_excel(df_saude_medicos),
                 file_name=f"saude_medicos_{municipio_de_interesse}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            st.download_button(
+                label="📥 Óbitos por Causa Básica",
+                data=to_excel(df_saude_obitos_tipo),
+                file_name=f"saude_obitos_causa_basica_{municipio_de_interesse}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
