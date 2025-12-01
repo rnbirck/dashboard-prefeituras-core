@@ -125,7 +125,7 @@ def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
 
     aba_selecionada = st.pills(
         "Selecione o indicador:",
-        options=["População Estimada", "Sexo", "Densidade Demográfica"],
+        options=["População Estimada", "Sexo", "Densidade Demográfica", "Área"],
         selection_mode="single",
         key=key_main_tab,
     )
@@ -210,6 +210,32 @@ def display_populacao_densidade_expander(df_filtrado, df_filtrado_sexo):
             fig, use_container_width=True
         )  # Ajustado para usar use_container_width=True
 
+    # --- ABA 4: ÁREA ---
+    elif aba_selecionada == "Área":
+        titulo_centralizado("Área dos Municípios (Km²)", 5)
+
+        # Pega a área mais recente de cada município
+        df_area = (
+            df_filtrado.groupby("municipio")["area"]
+            .first()
+            .reset_index()
+            .set_index("municipio")
+            .T
+        )
+        df_area.index = [""]
+
+        fig = criar_grafico_barras(
+            df=df_area,
+            titulo="",
+            label_y="Área (Km²)",
+            barmode="group",
+            height=400,
+            data_label_format=",.1f",
+            hover_label_format=",.1f",
+            color_map=CORES_MUNICIPIOS,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
 
 def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_interesse):
     anos_disponiveis = sorted(
@@ -267,6 +293,14 @@ def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_inter
     # Adiciona coluna com proporção absoluta para exibição
     df_plot["proporcao_abs"] = df_plot["proporcao"].abs()
 
+    # Colunas formatadas para hover no padrão pt-BR
+    df_plot["pop_formatada"] = df_plot["pop_estimada"].apply(
+        lambda x: f"{x:,.0f}".replace(",", ".")
+    )
+    df_plot["proporcao_formatada"] = df_plot["proporcao_abs"].apply(
+        lambda x: f"{x:.1f}".replace(".", ",")
+    )
+
     fig = px.bar(
         df_plot,
         y="faixa_etaria",
@@ -285,7 +319,7 @@ def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_inter
         text=df_plot["proporcao"].apply(
             lambda x: f"{abs(x):.1f}".replace(".", ",") + "%"
         ),
-        custom_data=["pop_estimada", "proporcao_abs"],
+        custom_data=["pop_formatada", "proporcao_formatada"],
     )
 
     fig.update_layout(
@@ -316,8 +350,8 @@ def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_inter
         hovertemplate=(
             "<b>%{data.name}</b><br>"
             "Faixa: %{y}<br>"
-            "População: %{customdata[0]:,.0f}<br>"
-            "Proporção: %{customdata[1]:.1f}%<extra></extra>"
+            "População: %{customdata[0]}<br>"
+            "Proporção: %{customdata[1]}%<extra></extra>"
         ),
     )
     titulo_centralizado(
