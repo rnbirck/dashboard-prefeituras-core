@@ -264,6 +264,9 @@ def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_inter
     max_val = df_plot["proporcao"].abs().max()
     axis_max = (max_val // 1) + 1
 
+    # Adiciona coluna com proporção absoluta para exibição
+    df_plot["proporcao_abs"] = df_plot["proporcao"].abs()
+
     fig = px.bar(
         df_plot,
         y="faixa_etaria",
@@ -282,6 +285,7 @@ def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_inter
         text=df_plot["proporcao"].apply(
             lambda x: f"{abs(x):.1f}".replace(".", ",") + "%"
         ),
+        custom_data=["pop_estimada", "proporcao_abs"],
     )
 
     fig.update_layout(
@@ -313,9 +317,8 @@ def display_populacao_piramide_etaria_expander(df_filtrado_sexo, municipio_inter
             "<b>%{data.name}</b><br>"
             "Faixa: %{y}<br>"
             "População: %{customdata[0]:,.0f}<br>"
-            "Proporção: %{customdata[1]}<extra></extra>"
+            "Proporção: %{customdata[1]:.1f}%<extra></extra>"
         ),
-        customdata=df_plot[["pop_estimada", "proporcao"]].abs(),
     )
     titulo_centralizado(
         f"Pirâmide Etária de {municipio_interesse} ({ano_selecionado})", 5
