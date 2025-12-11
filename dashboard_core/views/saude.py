@@ -105,23 +105,37 @@ def preparar_dados_graficos_saude_mensal(
     ult_ano, ult_mes = None, None
 
     if not df_filtrado.empty:
+        # Filtra apenas registros onde a coluna selecionada tem dados válidos (não nulo)
+        df_com_dados = df_filtrado[df_filtrado[coluna_selecionada].notna()].copy()
+
+        if df_com_dados.empty:
+            return (
+                df_hist,
+                df_acum,
+                df_acum_var,
+                df_anual,
+                df_anual_var,
+                ult_ano,
+                ult_mes,
+            )
+
         # Se anos_visualizacao for fornecido, usa para determinar o último ano
         if anos_visualizacao:
-            df_range_visualizacao = df_filtrado[
-                df_filtrado["ano"].isin(anos_visualizacao)
+            df_range_visualizacao = df_com_dados[
+                df_com_dados["ano"].isin(anos_visualizacao)
             ]
             if df_range_visualizacao.empty:
-                ult_ano = df_filtrado["ano"].max()
+                ult_ano = df_com_dados["ano"].max()
             else:
                 ult_ano = df_range_visualizacao["ano"].max()
         else:
-            ult_ano = df_filtrado["ano"].max()
+            ult_ano = df_com_dados["ano"].max()
 
-        ult_mes = df_filtrado[df_filtrado["ano"] == ult_ano]["mes"].max()
+        ult_mes = df_com_dados[df_com_dados["ano"] == ult_ano]["mes"].max()
 
         # Evolução Mensal
         df_hist_full = (
-            df_filtrado.assign(
+            df_com_dados.assign(
                 date=lambda x: pd.to_datetime(
                     x["ano"].astype(str)
                     + "-"
@@ -134,8 +148,8 @@ def preparar_dados_graficos_saude_mensal(
                 columns="municipio",
                 values=coluna_selecionada,
                 aggfunc="sum",
-                fill_value=0,
             )
+            .dropna(how="all")  # Remove datas onde todos os municípios têm NaN
             .sort_index()
         )
 
@@ -150,14 +164,17 @@ def preparar_dados_graficos_saude_mensal(
         is_taxa = metodo_agg == "mean"  # Se for mean, é taxa/proporção
 
         # Acumulado no Ano
-        df_acum_temp = df_filtrado[df_filtrado["mes"] <= ult_mes]
-        df_acum_full = df_acum_temp.pivot_table(
-            index="ano",
-            columns="municipio",
-            values=coluna_selecionada,
-            aggfunc=agg_func,
-            fill_value=0,
-        ).sort_index()
+        df_acum_temp = df_com_dados[df_com_dados["mes"] <= ult_mes]
+        df_acum_full = (
+            df_acum_temp.pivot_table(
+                index="ano",
+                columns="municipio",
+                values=coluna_selecionada,
+                aggfunc=agg_func,
+            )
+            .dropna(how="all")
+            .sort_index()
+        )  # Remove anos sem dados
 
         # Calcula variação (diferença para taxas, percentual para valores absolutos)
         if is_taxa:
@@ -173,15 +190,18 @@ def preparar_dados_graficos_saude_mensal(
         df_acum_var = df_acum_var_full  # Variação mantém todos os anos
 
         # Anual
-        ano_completo = checar_ult_ano_completo(df_filtrado)
-        df_anual_temp = df_filtrado[df_filtrado["ano"] <= ano_completo]
-        df_anual_full = df_anual_temp.pivot_table(
-            index="ano",
-            columns="municipio",
-            values=coluna_selecionada,
-            aggfunc=agg_func,
-            fill_value=0,
-        ).sort_index()
+        ano_completo = checar_ult_ano_completo(df_com_dados)
+        df_anual_temp = df_com_dados[df_com_dados["ano"] <= ano_completo]
+        df_anual_full = (
+            df_anual_temp.pivot_table(
+                index="ano",
+                columns="municipio",
+                values=coluna_selecionada,
+                aggfunc=agg_func,
+            )
+            .dropna(how="all")
+            .sort_index()
+        )  # Remove anos sem dados
 
         # Calcula variação
         if is_taxa:
@@ -267,13 +287,16 @@ def preparar_dados_graficos_saude_anual(
     Prepara os DataFrames para os gráficos anuais.
     Retorna também DataFrame de variação.
     """
-    df_anual_full = df_filtrado.pivot_table(
-        index="ano",
-        columns="municipio",
-        values=coluna_selecionada,
-        aggfunc="sum",
-        fill_value=0,
-    ).sort_index()
+    df_anual_full = (
+        df_filtrado.pivot_table(
+            index="ano",
+            columns="municipio",
+            values=coluna_selecionada,
+            aggfunc="sum",
+        )
+        .dropna(how="all")
+        .sort_index()
+    )  # Remove anos sem dados
 
     # Calcula variação
     if is_percentual:
