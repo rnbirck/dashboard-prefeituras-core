@@ -288,8 +288,32 @@ def criar_grafico_barras(
     )
 
     xaxis_config = {}
-    if pd.api.types.is_numeric_dtype(df.index):
-        xaxis_config = dict(tickmode="linear", dtick=1)
+    is_numeric = pd.api.types.is_numeric_dtype(df.index)
+    is_string_numeric = False
+
+    if not is_numeric and df.index.dtype == "object":
+        try:
+            idx_numeric = pd.to_numeric(df.index, errors="coerce")
+            is_string_numeric = not idx_numeric.isna().any()
+        except Exception:
+            is_string_numeric = False
+
+    if is_numeric or is_string_numeric:
+        tick0 = None
+        try:
+            idx_numeric = pd.to_numeric(pd.Index(df.index), errors="coerce")
+            min_val = float(np.nanmin(idx_numeric))
+            if np.isfinite(min_val):
+                if abs(min_val - round(min_val)) < 1e-9:
+                    tick0 = int(round(min_val))
+                else:
+                    tick0 = min_val
+        except Exception:
+            tick0 = None
+
+        xaxis_config = dict(tickmode="linear", dtick=1, tickformat="d")
+        if tick0 is not None:
+            xaxis_config["tick0"] = tick0
 
     fig.update_layout(
         margin=dict(t=50),
