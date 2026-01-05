@@ -460,11 +460,15 @@ def criar_tabela_formatada(df, index_col, ult_ano, ult_mes, coluna_agregacao):
 def criar_tabela_formatada_mes(df, index_col, ult_ano, ult_mes, coluna_agregacao):
     """Cria uma tabela formatada para exibição no Streamlit."""
     df_filtrado = df[df["mes"] == ult_mes]
+
+    # Para colunas de estoque, usar mean; para outras agregações (saldo), usar sum
+    agg_func = "mean" if "estoque" in coluna_agregacao else "sum"
+
     df_pivot = df_filtrado.pivot_table(
         index=index_col,
         columns="ano",
         values=coluna_agregacao,
-        aggfunc="sum",
+        aggfunc=agg_func,
         fill_value=0,
     ).sort_values(by=ult_ano, ascending=False)
 
@@ -504,7 +508,7 @@ def criar_tabela_formatada_ano_estoque(df, index_col, coluna_agregacao):
         index=index_col,
         columns="ano",
         values=coluna_agregacao,
-        aggfunc="sum",
+        aggfunc="mean",
         fill_value=0,
     ).sort_values(by=ult_ano, ascending=False)
 

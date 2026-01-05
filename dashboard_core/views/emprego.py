@@ -340,11 +340,14 @@ def preparar_dados_graficos_estoque(df_filtrado):
 
     # Função auxiliar interna para pivotar
     def pivotar(df_in, index_col, value_col, ascending=True):
+        # Para dados de estoque, usar mean para evitar soma incorreta de duplicatas
+        agg_func = "mean" if "estoque" in value_col else "sum"
+
         return df_in.pivot_table(
             index=index_col,
             columns="municipio",
             values=value_col,
-            aggfunc="sum",
+            aggfunc=agg_func,
             observed=False,
             fill_value=0,
         ).sort_index(ascending=ascending)
@@ -850,7 +853,7 @@ def display_estoque_categoria_expander(
                 label_y = "Variação em relação ao mesmo período do ano anterior (%)"
             else:
                 coluna_agregacao = "estoque_mensal"
-                usar_dezembro = False
+                usar_dezembro = True  # Para estoque anual, sempre usar dezembro
                 data_fmt = ",.0f"
                 label_y = "Estoque"
 
