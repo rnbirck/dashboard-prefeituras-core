@@ -651,12 +651,15 @@ def render_estabelecimentos_tabela_tab(
     df_pivot.index.name = titulo.split(" por ")[-1]
 
     # 5. Estilização
-    styler = df_pivot.style.format(fmt)
-
     if metric_mode == "Variação (%)":
-        styler = styler.map(style_saldo_variacao)
+        # Formatação com % e separador decimal ,
+        styler = df_pivot.style.format(
+            lambda x: f"{x:+,.1f}%".replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        ).map(style_saldo_variacao)
     else:
-        styler = styler.background_gradient(cmap="GnBu")
+        styler = df_pivot.style.format(fmt).background_gradient(cmap="GnBu")
 
     st.dataframe(styler, width="stretch")
 
@@ -734,7 +737,7 @@ def display_estabelecimentos(
             render_estabelecimentos_tabela_tab(
                 df=df_estabelecimentos_grupo,
                 index_col="grupo",
-                titulo="por CNAE - Grupo",
+                titulo="CNAE - Grupo",
                 municipio_interesse=municipio_interesse,
                 metric_mode=metric_mode,
             )
@@ -744,7 +747,7 @@ def display_estabelecimentos(
             render_estabelecimentos_tabela_tab(
                 df=df_estabelecimentos_subclasse,
                 index_col="subclasse",
-                titulo="por CNAE - Subclasse",
+                titulo="CNAE - Subclasse",
                 municipio_interesse=municipio_interesse,
                 metric_mode=metric_mode,
             )
