@@ -272,7 +272,28 @@ def display_secao_seguranca(
             )
         )
 
-        anos_disponiveis = sorted(list(anos_visuais), reverse=True)
+        # Filtra anos disponíveis baseado nos dados reais do DataFrame
+        anos_com_dados = (
+            sorted(
+                df_seguranca[coluna_selecionada]
+                .notna()
+                .loc[lambda x: x]
+                .index.to_series()
+                .apply(lambda idx: df_seguranca.loc[idx, "ano"])
+                .unique()
+                .tolist(),
+                reverse=True,
+            )
+            if not df_seguranca.empty and coluna_selecionada in df_seguranca.columns
+            else []
+        )
+
+        # Intersecção entre anos de visualização e anos com dados
+        anos_disponiveis = (
+            sorted([ano for ano in anos_visuais if ano in anos_com_dados], reverse=True)
+            if anos_com_dados
+            else sorted(list(anos_visuais), reverse=True)
+        )
 
         # --- 3. NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
         key_main_tab = f"main_tab_nav_{key_prefix}"

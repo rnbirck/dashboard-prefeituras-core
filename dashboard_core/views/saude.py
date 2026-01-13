@@ -92,12 +92,23 @@ def obitos_causa_basica_callback():
 
 
 def preparar_dados_graficos_saude_mensal(
-    df_filtrado, coluna_selecionada, metodo_agg="sum", anos_visualizacao=None
+    df_filtrado,
+    coluna_selecionada,
+    metodo_agg="sum",
+    anos_visualizacao=None,
+    col_numerador=None,
+    col_denominador=None,
+    fator_multiplicacao=1,
 ):
     """
     Prepara os DataFrames para os gráficos, usando o método de agregação correto.
-    'sum' para números absolutos, 'mean' para taxas/proporções.
+    'sum' para números absolutos, 'ratio' para taxas/proporções calculadas.
     Retorna também DataFrames de variação.
+
+    Args:
+        col_numerador: Nome da coluna numerador para cálculo de proporção/taxa
+        col_denominador: Nome da coluna denominador para cálculo de proporção/taxa
+        fator_multiplicacao: Fator para multiplicar o resultado (ex: 100 para %, 1000 para taxas por mil)
     """
     df_hist = pd.DataFrame()
     df_acum, df_acum_var = pd.DataFrame(), pd.DataFrame()
@@ -105,8 +116,17 @@ def preparar_dados_graficos_saude_mensal(
     ult_ano, ult_mes = None, None
 
     if not df_filtrado.empty:
-        # Filtra apenas registros onde a coluna selecionada tem dados válidos (não nulo)
-        df_com_dados = df_filtrado[df_filtrado[coluna_selecionada].notna()].copy()
+        # Para cálculo de proporção/taxa, não filtra NaN pois vai calcular a partir de numerador e denominador
+        # Para soma, filtra registros com dados válidos
+        if metodo_agg == "ratio":
+            df_com_dados = df_filtrado.copy()
+            # Preenche NaN com 0 para as colunas de cálculo
+            if col_numerador:
+                df_com_dados[col_numerador] = df_com_dados[col_numerador].fillna(0)
+            if col_denominador:
+                df_com_dados[col_denominador] = df_com_dados[col_denominador].fillna(0)
+        else:
+            df_com_dados = df_filtrado[df_filtrado[coluna_selecionada].notna()].copy()
 
         if df_com_dados.empty:
             return (
@@ -160,21 +180,46 @@ def preparar_dados_graficos_saude_mensal(
             df_hist = df_hist_full
 
         # Lógica de Agregação para Acumulado e Anual
-        agg_func = "mean" if metodo_agg == "mean" else "sum"
-        is_taxa = metodo_agg == "mean"  # Se for mean, é taxa/proporção
+        is_taxa = metodo_agg == "ratio"  # Se for ratio, é taxa/proporção calculada
 
         # Acumulado no Ano
         df_acum_temp = df_com_dados[df_com_dados["mes"] <= ult_mes]
-        df_acum_full = (
-            df_acum_temp.pivot_table(
-                index="ano",
-                columns="municipio",
-                values=coluna_selecionada,
-                aggfunc=agg_func,
+
+        if metodo_agg == "ratio":
+            # Para proporções/taxas, soma numerador e denominador separadamente
+            df_num = (
+                df_acum_temp.pivot_table(
+                    index="ano",
+                    columns="municipio",
+                    values=col_numerador,
+                    aggfunc="sum",
+                )
+                .dropna(how="all")
+                .sort_index()
             )
-            .dropna(how="all")
-            .sort_index()
-        )  # Remove anos sem dados
+            df_den = (
+                df_acum_temp.pivot_table(
+                    index="ano",
+                    columns="municipio",
+                    values=col_denominador,
+                    aggfunc="sum",
+                )
+                .dropna(how="all")
+                .sort_index()
+            )
+            # Calcula a proporção/taxa
+            df_acum_full = (df_num / df_den.replace(0, pd.NA)) * fator_multiplicacao
+        else:
+            df_acum_full = (
+                df_acum_temp.pivot_table(
+                    index="ano",
+                    columns="municipio",
+                    values=coluna_selecionada,
+                    aggfunc="sum",
+                )
+                .dropna(how="all")
+                .sort_index()
+            )  # Remove anos sem dados
 
         # Calcula variação (diferença para taxas, percentual para valores absolutos)
         if is_taxa:
@@ -192,16 +237,42 @@ def preparar_dados_graficos_saude_mensal(
         # Anual
         ano_completo = checar_ult_ano_completo(df_com_dados)
         df_anual_temp = df_com_dados[df_com_dados["ano"] <= ano_completo]
-        df_anual_full = (
-            df_anual_temp.pivot_table(
-                index="ano",
-                columns="municipio",
-                values=coluna_selecionada,
-                aggfunc=agg_func,
+
+        if metodo_agg == "ratio":
+            # Para proporções/taxas, soma numerador e denominador separadamente
+            df_num = (
+                df_anual_temp.pivot_table(
+                    index="ano",
+                    columns="municipio",
+                    values=col_numerador,
+                    aggfunc="sum",
+                )
+                .dropna(how="all")
+                .sort_index()
             )
-            .dropna(how="all")
-            .sort_index()
-        )  # Remove anos sem dados
+            df_den = (
+                df_anual_temp.pivot_table(
+                    index="ano",
+                    columns="municipio",
+                    values=col_denominador,
+                    aggfunc="sum",
+                )
+                .dropna(how="all")
+                .sort_index()
+            )
+            # Calcula a proporção/taxa
+            df_anual_full = (df_num / df_den.replace(0, pd.NA)) * fator_multiplicacao
+        else:
+            df_anual_full = (
+                df_anual_temp.pivot_table(
+                    index="ano",
+                    columns="municipio",
+                    values=coluna_selecionada,
+                    aggfunc="sum",
+                )
+                .dropna(how="all")
+                .sort_index()
+            )  # Remove anos sem dados
 
         # Calcula variação
         if is_taxa:
@@ -420,12 +491,29 @@ def display_saude_expander(
         )
 
         # --- LÓGICA PADRÃO PARA GRÁFICOS ---
-        coluna_selecionada, agg_method, label_y, data_format = dicionario_indicadores[
-            indicador_selecionado
-        ]
+        config_indicador = dicionario_indicadores[indicador_selecionado]
+
+        # Desempacotar configuração do indicador
+        if len(config_indicador) == 4:
+            # Formato antigo: (coluna, agg_method, label_y, data_format)
+            coluna_selecionada, agg_method, label_y, data_format = config_indicador
+            col_numerador = None
+            col_denominador = None
+            fator_mult = 1
+        else:
+            # Formato novo: (coluna, agg_method, label_y, data_format, col_num, col_den, fator)
+            (
+                coluna_selecionada,
+                agg_method,
+                label_y,
+                data_format,
+                col_numerador,
+                col_denominador,
+                fator_mult,
+            ) = config_indicador
 
         # Verifica se é taxa/proporção para definir tipo de variação
-        is_taxa = agg_method == "mean"
+        is_taxa = agg_method == "ratio"
         label_var = "Variação (p.p.)" if is_taxa else "Variação (%)"
         fmt_var = "+,.2f" if is_taxa else "+,.1f"
 
@@ -441,6 +529,9 @@ def display_saude_expander(
                 coluna_selecionada,
                 agg_method,
                 anos_visualizacao=ANOS_DE_INTERESSE,
+                col_numerador=col_numerador,
+                col_denominador=col_denominador,
+                fator_multiplicacao=fator_mult,
             )
         )
 
@@ -449,58 +540,20 @@ def display_saude_expander(
         # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
         key_main_tab = f"main_tab_nav_{key_prefix}"
         if key_main_tab not in st.session_state:
-            st.session_state[key_main_tab] = "Evolução Mensal"
+            st.session_state[key_main_tab] = "Acumulado no Ano"
 
         aba_selecionada = st.pills(
             "Selecione o tipo de análise temporal:",
-            options=["Evolução Mensal", "Acumulado no Ano", "Anual"],
+            options=["Acumulado no Ano", "Anual"],
             selection_mode="single",
             key=key_main_tab,
         )
 
         if not aba_selecionada:
-            aba_selecionada = "Evolução Mensal"
+            aba_selecionada = "Acumulado no Ano"
 
-        # --- ABA 1: Evolução MENSAL ---
-        if aba_selecionada == "Evolução Mensal":
-            if not anos_disponiveis:
-                st.warning("Nenhum dado disponível para os filtros selecionados.")
-            else:
-                ANO_SELECIONADO = st.selectbox(
-                    "Selecione o ano para o gráfico:",
-                    options=anos_disponiveis,
-                    index=0,
-                    key=f"{key_prefix}_hist_ano",
-                    on_change=callback_func,
-                )
-                titulo_centralizado(
-                    f"{indicador_selecionado} - Evolução Mensal em {ANO_SELECIONADO}",
-                    5,
-                )
-
-                df_hist_ano = df_hist[df_hist.index.year == ANO_SELECIONADO]
-                if not df_hist_ano.empty:
-                    df_hist_ano.index = [
-                        f"{MESES_DIC[date.month][:3]}/{str(date.year)[2:]}"
-                        for date in df_hist_ano.index
-                    ]
-
-                    fig = criar_grafico_barras(
-                        df=df_hist_ano,
-                        titulo="",
-                        label_y=label_y,
-                        barmode="group",
-                        height=400,
-                        data_label_format=data_format,
-                        hover_label_format=hover_format,
-                        color_map=CORES_MUNICIPIOS,
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.info(f"Sem dados mensais para {ANO_SELECIONADO}.")
-
-        # --- ABA 2: ACUMULADO NO ANO ---
-        elif aba_selecionada == "Acumulado no Ano":
+        # --- ABA 1: ACUMULADO NO ANO ---
+        if aba_selecionada == "Acumulado no Ano":
             if ult_mes:
                 # Seletor de modo
                 key_acum = f"acum_mode_{key_prefix}"
@@ -573,7 +626,7 @@ def display_saude_expander(
             else:
                 st.warning("Dados acumulados não disponíveis.")
 
-        # --- ABA 3: ANUAL ---
+        # --- ABA 2: ANUAL ---
         elif aba_selecionada == "Anual":
             # Seletor de modo
             key_anual = f"anual_mode_{key_prefix}"
@@ -775,59 +828,80 @@ def show_page_saude(
             ",.0f",
         ),
         "Proporção de Óbitos com Causas Definidas (%)": (
-            "prop_obitos_causas_definidas",
-            "mean",
+            None,  # coluna não usada diretamente
+            "ratio",
             "Proporção (%)",
             ".1f",
+            "obitos_causa_definida",  # numerador
+            "obitos_totais",  # denominador
+            100,  # fator para percentual
         ),
         "Proporção de Óbitos com Causas Não Definidas (%)": (
-            "prop_obitos_causa_nao_definida",
-            "mean",
+            None,
+            "ratio",
             "Proporção (%)",
             ".1f",
+            "obitos_causa_nao_definida",
+            "obitos_totais",
+            100,
         ),
     }
 
     INDICADORES_NASCIMENTOS = {
-        "Nascidos Vivos": ("nascimentos", "sum", "Nº de Nascidos", ",.0f"),
+        "Nascidos Vivos": ("nascimentos_total", "sum", "Nº de Nascidos", ",.0f"),
         "Nascidos por Mil Habitantes": (
             "nascimentos/1000_hab",
             "sum",
             "Nascidos por mil hab.",
             ".2f",
         ),
-        "Mortalidade Infantil": (
-            "taxa_obitos_infantis",
-            "mean",
+        "Mortalidade Infantil (por mil nascidos vivos)": (
+            None,
+            "ratio",
             "Taxa de Mort. Infantil por mil nasc.",
             ".1f",
+            "obitos_infantis",
+            "nascimentos_mort_infantil",
+            1000,
         ),
         "Proporção de Nascidos Vivos com Baixo Peso ao Nascer (%)": (
-            "prop_nasc_baixo_peso",
-            "mean",
+            None,
+            "ratio",
             "Prop. de Nascidos Vivos (%)",
             ".1f",
+            "nasc_baixo_peso",
+            "nascimentos_total",
+            100,
         ),
         "Proporção de Nascidos Vivos com Sete ou Mais Consultas de Pré-Natal (%)": (
-            "prop_consultas_pre_natal",
-            "mean",
+            None,
+            "ratio",
             "Prop. de Nascidos Vivos (%)",
             ".1f",
+            "consultas_pre_natal",
+            "nascimentos_pre_natal_total",
+            100,
         ),
     }
 
     INDICADORES_GESTANTES = {
         "Proporção de Gravidez na Adolescência entre as Faixas Etárias 10 a 19 anos (%)": (
-            "prop_nasc_adolesc",
-            "mean",
+            None,
+            "ratio",
             "Prop. de Gravidez (%)",
             ".1f",
+            "num_adolescentes",
+            "nascimentos_adolesc",
+            100,
         ),
         "Coeficiente de Mortalidade Neonatal (por mil nascidos vivos)": (
-            "coef_neonatal",
-            "mean",
+            None,
+            "ratio",
             "Coeficiente por mil nascidos vivos",
             ".1f",
+            "obitos_neonatal",
+            "nascimentos_total",
+            1000,
         ),
     }
     INDICADORES_ATENCAO_BASICA_MENSAL = {
@@ -844,10 +918,13 @@ def show_page_saude(
             ",.0f",
         ),
         "Proporção das Internações por Condições Sensíveis à Atenção Básica - ICSAB (%)": (
-            "prop_icsab",
-            "mean",
+            None,
+            "ratio",
             "Prop. de Internações (%)",
             ".1f",
+            "internacoes_icsab",
+            "internacoes_totais",
+            100,
         ),
     }
     INDICADORES_ACIDENTE_DE_TRABALHO = {
@@ -858,10 +935,13 @@ def show_page_saude(
             ",.0f",
         ),
         "Taxa de Acidentes e Doenças Relacionadas ao Trabalho por 10 mil Habitantes": (
-            "taxa_acidentes_trab",
-            "mean",
+            None,
+            "ratio",
             "Taxa por 10 mil Hab.",
             ".2f",
+            "notificacoes_acidentes_trab",
+            "populacao",
+            10000,
         ),
     }
 
