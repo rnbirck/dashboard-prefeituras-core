@@ -151,7 +151,21 @@ def preparar_dados_graficos_saude_mensal(
         else:
             ult_ano = df_com_dados["ano"].max()
 
-        ult_mes = df_com_dados[df_com_dados["ano"] == ult_ano]["mes"].max()
+        # Para proporções/taxas, calcula ult_mes baseado nos dados válidos das colunas específicas
+        if metodo_agg == "ratio" and col_numerador and col_denominador:
+            # Filtra registros onde AMBAS as colunas têm dados válidos (não-zero e não-nulo)
+            df_validos = df_com_dados[
+                (df_com_dados[col_numerador].notna())
+                & (df_com_dados[col_numerador] > 0)
+                & (df_com_dados[col_denominador].notna())
+                & (df_com_dados[col_denominador] > 0)
+            ]
+            if not df_validos.empty:
+                ult_mes = df_validos[df_validos["ano"] == ult_ano]["mes"].max()
+            else:
+                ult_mes = df_com_dados[df_com_dados["ano"] == ult_ano]["mes"].max()
+        else:
+            ult_mes = df_com_dados[df_com_dados["ano"] == ult_ano]["mes"].max()
 
         # Evolução Mensal
         df_hist_full = (
