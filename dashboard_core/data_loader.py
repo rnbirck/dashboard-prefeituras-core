@@ -896,6 +896,21 @@ def carregar_dados_saude_mensal(municipios, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_saude_mort_prematura(municipios, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_saude_mort_prematura")
+        .select("*")
+        .in_("municipio", list(municipios))
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_saude_despesas(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
@@ -937,7 +952,12 @@ def carregar_dados_saude_leitos(municipios, anos):
         .in_("ano", list(anos))
         .execute()
     )
-    return pd.DataFrame(response.data)
+    df = pd.DataFrame(response.data)
+    if not df.empty and "qtd_leitos" in df.columns and "qtd_leitos_sus" in df.columns:
+        df["percentual_leitos_sus"] = (
+            df["qtd_leitos_sus"] * 100.0 / df["qtd_leitos"].replace(0, pd.NA)
+        ).round(1)
+    return df
 
 
 @st.cache_data(ttl=CACHE_TTL)
@@ -952,7 +972,12 @@ def carregar_dados_saude_medicos(municipios, anos):
         .in_("ano", list(anos))
         .execute()
     )
-    return pd.DataFrame(response.data)
+    df = pd.DataFrame(response.data)
+    if not df.empty and "qtd_medicos" in df.columns and "qtd_medicos_sus" in df.columns:
+        df["percentual_medicos_sus"] = (
+            df["qtd_medicos_sus"] * 100.0 / df["qtd_medicos"].replace(0, pd.NA)
+        ).round(1)
+    return df
 
 
 @st.cache_data(ttl=CACHE_TTL)

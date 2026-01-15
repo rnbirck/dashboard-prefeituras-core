@@ -55,6 +55,7 @@ def show_page_dados(
     df_saude_despesas,
     df_saude_leitos,
     df_saude_medicos,
+    df_saude_mort_prematura,
     df_saude_obitos_tipo,
     # --- DataFrame da Página PIB ---
     df_pib_municipios,
@@ -549,7 +550,7 @@ def show_page_dados(
         # --- DADOS MENSAIS ---
         st.subheader("Dados Mensais de Saúde")
         st.markdown(
-            "Indicadores atualizados mensalmente (ex.: óbitos, nascimentos, atenção básica, internações)."
+            "Indicadores atualizados mensalmente (ex.: óbitos, nascimentos, atenção básica, internações) e dados quadrimestrais de mortalidade prematura por DCNT."
         )
         col_sd_a, col_sd_b = st.columns(2)
 
@@ -563,7 +564,13 @@ def show_page_dados(
             )
 
         with col_sd_b:
-            st.write("")
+            st.download_button(
+                label="📥 Mortalidade Prematura por DCNT",
+                data=to_excel(df_saude_mort_prematura),
+                file_name=f"saude_mortalidade_prematura_dcnt_{municipio_de_interesse}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
 
         st.divider()
 

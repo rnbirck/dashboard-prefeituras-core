@@ -484,6 +484,557 @@ def display_obitos_causa_basica_expander(
             st.warning("Nenhum registro encontrado para a busca.")
 
 
+def display_mortalidade_prematura(
+    df_mort_prematura, df_saude_mensal, key_prefix, callback_func
+):
+    """Exibe os gráficos de mortalidade prematura por DCNT."""
+
+    # Mapeamento de nomes das doenças
+    DOENCAS_MAP = {
+        "Câncer": "cancer",
+        "Diabetes": "diabetes",
+        "Doenças do Aparelho Circulatório": "doencas_aparelho_circulatorio",
+        "Doenças Crônicas Respiratórias": "doencas_cronicas_respiratorias",
+    }
+
+    QUADRIMESTRES_LABEL = {
+        1: "1º Quadrimestre",
+        2: "2º Quadrimestre",
+        3: "3º Quadrimestre",
+    }
+
+    # --- NAVEGAÇÃO ENTRE TIPOS DE ANÁLISE (PILLS) ---
+    key_tipo_analise = f"tipo_analise_{key_prefix}"
+    if key_tipo_analise not in st.session_state:
+        st.session_state[key_tipo_analise] = "DCNT em relação ao total de óbitos"
+
+    tipo_analise = st.pills(
+        "Selecione o tipo de análise:",
+        options=["DCNT em relação ao total de óbitos", "Participação de cada DCNT"],
+        selection_mode="single",
+        key=key_tipo_analise,
+    )
+
+    if not tipo_analise:
+        tipo_analise = "DCNT em relação ao total de óbitos"
+
+    # --- NAVEGAÇÃO ENTRE "ABAS" TEMPORAIS (PILLS) ---
+    key_main_tab = f"main_tab_nav_{key_prefix}"
+    if key_main_tab not in st.session_state:
+        st.session_state[key_main_tab] = "Acumulado no Ano"
+
+    aba_selecionada = st.pills(
+        "Selecione o tipo de análise temporal:",
+        options=["Acumulado no Ano", "Anual"],
+        selection_mode="single",
+        key=key_main_tab,
+    )
+
+    if not aba_selecionada:
+        aba_selecionada = "Acumulado no Ano"
+
+    # ========== ANÁLISE 1: DCNT EM RELAÇÃO AO TOTAL DE ÓBITOS ==========
+    if tipo_analise == "DCNT em relação ao total de óbitos":
+        label_y = "Proporção de DCNT no Total de Óbitos (%)"
+        label_var = "Variação (p.p.)"
+        data_format = ".1f"
+        hover_format = ".2f"
+        fmt_var = "+,.2f"
+
+        # --- ABA 1: ACUMULADO NO ANO (QUADRIMESTRAL) ---
+        if aba_selecionada == "Acumulado no Ano":
+            # Obter último quadrimestre disponível
+            ult_quadrimestre = int(df_mort_prematura["quadrimestre"].max())
+
+            # Preparar dados de DCNT
+            df_dcnt = df_mort_prematura.copy()
+
+            # Preparar dados de óbitos totais - somar por quadrimestre
+            df_obitos = df_saude_mensal.copy()
+            df_obitos["quadrimestre"] = df_obitos["mes"].apply(
+                lambda m: 1 if m in [1, 2, 3, 4] else (2 if m in [5, 6, 7, 8] else 3)
+            )
+
+            # Agrupar óbitos totais por ano, município e quadrimestre
+            df_obitos_quad = (
+                df_obitos.groupby(["ano", "municipio", "quadrimestre"])
+                .agg({"obitos_totais": "sum"})
+                .reset_index()
+            )
+
+            # Filtrar até o último quadrimestre
+            df_dcnt_acum = df_dcnt[df_dcnt["quadrimestre"] <= ult_quadrimestre].copy()
+            df_obitos_acum = df_obitos_quad[
+                df_obitos_quad["quadrimestre"] <= ult_quadrimestre
+            ].copy()
+
+            # Agrupar DCNT por ano (soma dos quadrimestres até o último)
+            df_dcnt_sum = (
+                df_dcnt_acum.groupby(["ano", "municipio"])
+                .agg({"dcnt": "sum"})
+                .reset_index()
+            )
+
+            # Agrupar óbitos totais por ano (soma dos quadrimestres até o último)
+            df_obitos_sum = (
+                df_obitos_acum.groupby(["ano", "municipio"])
+                .agg({"obitos_totais": "sum"})
+                .reset_index()
+            )
+
+            # Fazer merge dos dois dataframes
+            df_merged = pd.merge(
+                df_dcnt_sum, df_obitos_sum, on=["ano", "municipio"], how="inner"
+            )
+
+            # Calcular proporção
+            df_merged["proporcao"] = (
+                df_merged["dcnt"] / df_merged["obitos_totais"]
+            ) * 100
+
+            # Pivotar
+            df_acum_pivot = df_merged.pivot(
+                index="ano", columns="municipio", values="proporcao"
+            ).sort_index()
+
+            # Calcular variação
+            df_acum_var = df_acum_pivot.diff()
+
+            # Filtrar por anos de interesse
+            if ANOS_DE_INTERESSE:
+                df_acum_pivot_filtrado = df_acum_pivot[
+                    df_acum_pivot.index.isin(ANOS_DE_INTERESSE)
+                ]
+            else:
+                df_acum_pivot_filtrado = df_acum_pivot
+
+            # Seletor de modo (Proporção ou Variação)
+            key_acum = f"acum_mode_{key_prefix}"
+            if key_acum not in st.session_state:
+                st.session_state[key_acum] = label_y
+
+            modo_acum = st.segmented_control(
+                "Visualizar:",
+                options=[label_y, label_var],
+                key=key_acum,
+                selection_mode="single",
+                on_change=callback_func,
+            )
+
+            if not modo_acum:
+                modo_acum = label_y
+
+            periodo_txt = QUADRIMESTRES_LABEL.get(
+                ult_quadrimestre, f"{ult_quadrimestre}º Quadrimestre"
+            )
+
+            if modo_acum == label_var:
+                titulo_centralizado(
+                    f"Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis - {label_var} - Até {periodo_txt}",
+                    5,
+                )
+                df_var_plot = (
+                    df_acum_var.copy().sort_index(ascending=True).dropna(how="all")
+                )
+                df_var_plot.index = (
+                    "1º-"
+                    + str(ult_quadrimestre)
+                    + "º Quadrimestre/"
+                    + df_var_plot.index.astype(str).str.slice(-2)
+                )
+
+                fig = criar_grafico_barras(
+                    df=df_var_plot,
+                    titulo="",
+                    label_y=label_var,
+                    barmode="group",
+                    height=400,
+                    data_label_format=fmt_var,
+                    hover_label_format=fmt_var,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                titulo_centralizado(
+                    f"Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis - Até {periodo_txt}",
+                    5,
+                )
+                df_plot = df_acum_pivot_filtrado.copy()
+                df_plot.index = (
+                    "1º-"
+                    + str(ult_quadrimestre)
+                    + "º Quadrimestre/"
+                    + df_plot.index.astype(str).str.slice(-2)
+                )
+
+                fig = criar_grafico_barras(
+                    df=df_plot,
+                    titulo="",
+                    label_y=label_y,
+                    barmode="group",
+                    height=400,
+                    data_label_format=data_format,
+                    hover_label_format=hover_format,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        # --- ABA 2: ANUAL ---
+        elif aba_selecionada == "Anual":
+            # Preparar dados de DCNT
+            df_dcnt = df_mort_prematura.copy()
+
+            # Preparar dados de óbitos totais - somar por quadrimestre
+            df_obitos = df_saude_mensal.copy()
+            df_obitos["quadrimestre"] = df_obitos["mes"].apply(
+                lambda m: 1 if m in [1, 2, 3, 4] else (2 if m in [5, 6, 7, 8] else 3)
+            )
+
+            # Agrupar óbitos totais por ano, município e quadrimestre
+            df_obitos_quad = (
+                df_obitos.groupby(["ano", "municipio", "quadrimestre"])
+                .agg({"obitos_totais": "sum"})
+                .reset_index()
+            )
+
+            # Agrupar DCNT por ano (soma de todos os quadrimestres)
+            df_dcnt_sum = (
+                df_dcnt.groupby(["ano", "municipio"]).agg({"dcnt": "sum"}).reset_index()
+            )
+
+            # Agrupar óbitos totais por ano (soma de todos os quadrimestres)
+            df_obitos_sum = (
+                df_obitos_quad.groupby(["ano", "municipio"])
+                .agg({"obitos_totais": "sum"})
+                .reset_index()
+            )
+
+            # Fazer merge dos dois dataframes
+            df_merged = pd.merge(
+                df_dcnt_sum, df_obitos_sum, on=["ano", "municipio"], how="inner"
+            )
+
+            # Calcular proporção
+            df_merged["proporcao"] = (
+                df_merged["dcnt"] / df_merged["obitos_totais"]
+            ) * 100
+
+            # Pivotar
+            df_anual = df_merged.pivot(
+                index="ano", columns="municipio", values="proporcao"
+            ).sort_index()
+
+            # Calcular variação
+            df_anual_var = df_anual.diff()
+
+            # Filtrar por anos de interesse
+            if ANOS_DE_INTERESSE:
+                df_anual_filtrado = df_anual[df_anual.index.isin(ANOS_DE_INTERESSE)]
+            else:
+                df_anual_filtrado = df_anual
+
+            # Seletor de modo (Proporção ou Variação)
+            key_anual = f"anual_mode_{key_prefix}"
+            if key_anual not in st.session_state:
+                st.session_state[key_anual] = label_y
+
+            modo_anual = st.segmented_control(
+                "Visualizar:",
+                options=[label_y, label_var],
+                key=key_anual,
+                selection_mode="single",
+                on_change=callback_func,
+            )
+
+            if not modo_anual:
+                modo_anual = label_y
+
+            if modo_anual == label_var:
+                titulo_centralizado(
+                    f"Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis - {label_var} Anual",
+                    5,
+                )
+                df_var_plot = (
+                    df_anual_var.copy().sort_index(ascending=True).dropna(how="all")
+                )
+
+                df_var_plot.index = df_var_plot.index.astype(str)
+
+                fig = criar_grafico_barras(
+                    df=df_var_plot,
+                    titulo="",
+                    label_y=label_var,
+                    barmode="group",
+                    height=400,
+                    data_label_format=fmt_var,
+                    hover_label_format=fmt_var,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                titulo_centralizado(
+                    "Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis - Análise Anual",
+                    5,
+                )
+                df_plot = df_anual_filtrado.copy().sort_index(ascending=False)
+                df_plot.index = df_plot.index.astype(str)
+
+                fig = criar_grafico_barras(
+                    df=df_plot,
+                    titulo="",
+                    label_y=label_y,
+                    barmode="group",
+                    height=400,
+                    data_label_format=data_format,
+                    hover_label_format=hover_format,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+    # ========== ANÁLISE 2: PARTICIPAÇÃO DE CADA DCNT ==========
+    elif tipo_analise == "Participação de cada DCNT":
+        label_y = "Participação no Total de DCNT (%)"
+        label_var = "Variação (p.p.)"
+        data_format = ".1f"
+        hover_format = ".2f"
+        fmt_var = "+,.2f"
+
+        # --- ABA 1: ACUMULADO NO ANO (QUADRIMESTRAL) ---
+        if aba_selecionada == "Acumulado no Ano":
+            # Obter último quadrimestre disponível
+            ult_quadrimestre = int(df_mort_prematura["quadrimestre"].max())
+
+            # Seletor de doença (Segmented Control)
+            key_doenca_acum = f"doenca_acum_{key_prefix}"
+            if key_doenca_acum not in st.session_state:
+                st.session_state[key_doenca_acum] = "Câncer"
+
+            doenca_selecionada = st.segmented_control(
+                "Selecione a doença:",
+                options=list(DOENCAS_MAP.keys()),
+                key=key_doenca_acum,
+                selection_mode="single",
+                on_change=callback_func,
+            )
+
+            if not doenca_selecionada:
+                doenca_selecionada = "Câncer"
+
+            coluna_doenca = DOENCAS_MAP[doenca_selecionada]
+
+            # Preparar dados
+            df_calc = df_mort_prematura.copy()
+
+            # Filtrar até o último quadrimestre
+            df_acum = df_calc[df_calc["quadrimestre"] <= ult_quadrimestre].copy()
+
+            # Agrupar por ano (soma dos quadrimestres até o último)
+            df_acum_sum = (
+                df_acum.groupby(["ano", "municipio"])
+                .agg({coluna_doenca: "sum", "dcnt": "sum"})
+                .reset_index()
+            )
+
+            # Calcular participação
+            df_acum_sum["participacao"] = (
+                df_acum_sum[coluna_doenca] / df_acum_sum["dcnt"]
+            ) * 100
+
+            # Pivotar
+            df_acum_pivot = df_acum_sum.pivot(
+                index="ano", columns="municipio", values="participacao"
+            ).sort_index()
+
+            # Calcular variação
+            df_acum_var = df_acum_pivot.diff()
+
+            # Filtrar por anos de interesse
+            if ANOS_DE_INTERESSE:
+                df_acum_pivot_filtrado = df_acum_pivot[
+                    df_acum_pivot.index.isin(ANOS_DE_INTERESSE)
+                ]
+            else:
+                df_acum_pivot_filtrado = df_acum_pivot
+
+            # Seletor de modo (Participação ou Variação)
+            key_acum = f"acum_mode_part_{key_prefix}"
+            if key_acum not in st.session_state:
+                st.session_state[key_acum] = label_y
+
+            modo_acum = st.segmented_control(
+                "Visualizar:",
+                options=[label_y, label_var],
+                key=key_acum,
+                selection_mode="single",
+                on_change=callback_func,
+            )
+
+            if not modo_acum:
+                modo_acum = label_y
+
+            periodo_txt = QUADRIMESTRES_LABEL.get(
+                ult_quadrimestre, f"{ult_quadrimestre}º Quadrimestre"
+            )
+
+            if modo_acum == label_var:
+                titulo_centralizado(
+                    f"Participação de {doenca_selecionada} no Total de Mortes Prematuras por DCNT - {label_var} - Até {periodo_txt}",
+                    5,
+                )
+                df_var_plot = (
+                    df_acum_var.copy().sort_index(ascending=True).dropna(how="all")
+                )
+                df_var_plot.index = (
+                    "1º-"
+                    + str(ult_quadrimestre)
+                    + "º Quadrimestre/"
+                    + df_var_plot.index.astype(str).str.slice(-2)
+                )
+
+                fig = criar_grafico_barras(
+                    df=df_var_plot,
+                    titulo="",
+                    label_y=label_var,
+                    barmode="group",
+                    height=400,
+                    data_label_format=fmt_var,
+                    hover_label_format=fmt_var,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                titulo_centralizado(
+                    f"Participação de {doenca_selecionada} no Total de Mortes Prematuras por DCNT - Até {periodo_txt}",
+                    5,
+                )
+                df_plot = df_acum_pivot_filtrado.copy()
+                df_plot.index = (
+                    "1º-"
+                    + str(ult_quadrimestre)
+                    + "º Quadrimestre/"
+                    + df_plot.index.astype(str).str.slice(-2)
+                )
+
+                fig = criar_grafico_barras(
+                    df=df_plot,
+                    titulo="",
+                    label_y=label_y,
+                    barmode="group",
+                    height=400,
+                    data_label_format=data_format,
+                    hover_label_format=hover_format,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        # --- ABA 2: ANUAL ---
+        elif aba_selecionada == "Anual":
+            # Seletor de doença (Segmented Control)
+            key_doenca_anual = f"doenca_anual_{key_prefix}"
+            if key_doenca_anual not in st.session_state:
+                st.session_state[key_doenca_anual] = "Câncer"
+
+            doenca_selecionada = st.segmented_control(
+                "Selecione a doença:",
+                options=list(DOENCAS_MAP.keys()),
+                key=key_doenca_anual,
+                selection_mode="single",
+                on_change=callback_func,
+            )
+
+            if not doenca_selecionada:
+                doenca_selecionada = "Câncer"
+
+            coluna_doenca = DOENCAS_MAP[doenca_selecionada]
+
+            # Preparar dados
+            df_calc = df_mort_prematura.copy()
+
+            # Agrupar por ano e município (soma de todos os quadrimestres)
+            df_anual_sum = (
+                df_calc.groupby(["ano", "municipio"])
+                .agg({coluna_doenca: "sum", "dcnt": "sum"})
+                .reset_index()
+            )
+
+            # Calcular participação
+            df_anual_sum["participacao"] = (
+                df_anual_sum[coluna_doenca] / df_anual_sum["dcnt"]
+            ) * 100
+
+            # Pivotar
+            df_anual = df_anual_sum.pivot(
+                index="ano", columns="municipio", values="participacao"
+            ).sort_index()
+
+            # Calcular variação
+            df_anual_var = df_anual.diff()
+
+            # Filtrar por anos de interesse
+            if ANOS_DE_INTERESSE:
+                df_anual_filtrado = df_anual[df_anual.index.isin(ANOS_DE_INTERESSE)]
+            else:
+                df_anual_filtrado = df_anual
+
+            # Seletor de modo (Participação ou Variação)
+            key_anual = f"anual_mode_part_{key_prefix}"
+            if key_anual not in st.session_state:
+                st.session_state[key_anual] = label_y
+
+            modo_anual = st.segmented_control(
+                "Visualizar:",
+                options=[label_y, label_var],
+                key=key_anual,
+                selection_mode="single",
+                on_change=callback_func,
+            )
+
+            if not modo_anual:
+                modo_anual = label_y
+
+            if modo_anual == label_var:
+                titulo_centralizado(
+                    f"Participação de {doenca_selecionada} no Total de Mortes Prematuras por DCNT - {label_var} Anual",
+                    5,
+                )
+                df_var_plot = (
+                    df_anual_var.copy().sort_index(ascending=True).dropna(how="all")
+                )
+
+                df_var_plot.index = df_var_plot.index.astype(str)
+
+                fig = criar_grafico_barras(
+                    df=df_var_plot,
+                    titulo="",
+                    label_y=label_var,
+                    barmode="group",
+                    height=400,
+                    data_label_format=fmt_var,
+                    hover_label_format=fmt_var,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                titulo_centralizado(
+                    f"Participação de {doenca_selecionada} no Total de Mortes Prematuras por DCNT - Análise Anual",
+                    5,
+                )
+                df_plot = df_anual_filtrado.copy().sort_index(ascending=False)
+                df_plot.index = df_plot.index.astype(str)
+
+                fig = criar_grafico_barras(
+                    df=df_plot,
+                    titulo="",
+                    label_y=label_y,
+                    barmode="group",
+                    height=400,
+                    data_label_format=data_format,
+                    hover_label_format=hover_format,
+                    color_map=CORES_MUNICIPIOS,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+
 def display_saude_expander(
     df_filtrado,
     titulo_expander,
@@ -491,6 +1042,7 @@ def display_saude_expander(
     key_prefix,
     expander_state_key,
     callback_func,
+    df_mort_prematura=None,
 ):
     """Função genérica para exibir uma seção de indicadores de saúde."""
     if expander_state_key not in st.session_state:
@@ -503,6 +1055,16 @@ def display_saude_expander(
             key=f"{key_prefix}_selectbox",
             on_change=callback_func,
         )
+
+        # TRATAMENTO ESPECIAL PARA MORTALIDADE PREMATURA
+        if indicador_selecionado == "Taxa de Mortalidade Prematura por DCNT":
+            if df_mort_prematura is not None and not df_mort_prematura.empty:
+                display_mortalidade_prematura(
+                    df_mort_prematura, df_filtrado, key_prefix, callback_func
+                )
+            else:
+                st.warning("Dados de mortalidade prematura não disponíveis.")
+            return
 
         # --- LÓGICA PADRÃO PARA GRÁFICOS ---
         config_indicador = dicionario_indicadores[indicador_selecionado]
@@ -548,8 +1110,6 @@ def display_saude_expander(
                 fator_multiplicacao=fator_mult,
             )
         )
-
-        anos_disponiveis = sorted(df_filtrado["ano"].unique().tolist(), reverse=True)
 
         # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
         key_main_tab = f"main_tab_nav_{key_prefix}"
@@ -801,6 +1361,7 @@ def show_page_saude(
     df_saude_despesas,
     df_saude_leitos,
     df_saude_medicos,
+    df_saude_mort_prematura=None,
     df_obitos_tipo=None,
 ):
     # 1. Inicialização dos estados dos expanders
@@ -825,6 +1386,31 @@ def show_page_saude(
     if "obitos_causa_basica_expander_state" not in st.session_state:
         st.session_state.obitos_causa_basica_expander_state = False
 
+    # Calcular colunas de percentual para médicos e leitos
+    if (
+        not df_saude_medicos.empty
+        and "qtd_medicos" in df_saude_medicos.columns
+        and "qtd_medicos_sus" in df_saude_medicos.columns
+    ):
+        df_saude_medicos = df_saude_medicos.copy()
+        df_saude_medicos["percentual_medicos_sus"] = (
+            df_saude_medicos["qtd_medicos_sus"]
+            * 100.0
+            / df_saude_medicos["qtd_medicos"].replace(0, pd.NA)
+        ).round(1)
+
+    if (
+        not df_saude_leitos.empty
+        and "qtd_leitos" in df_saude_leitos.columns
+        and "qtd_leitos_sus" in df_saude_leitos.columns
+    ):
+        df_saude_leitos = df_saude_leitos.copy()
+        df_saude_leitos["percentual_leitos_sus"] = (
+            df_saude_leitos["qtd_leitos_sus"]
+            * 100.0
+            / df_saude_leitos["qtd_leitos"].replace(0, pd.NA)
+        ).round(1)
+
     titulo_centralizado("Dashboard de Saúde", 1)
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
 
@@ -842,7 +1428,7 @@ def show_page_saude(
             ",.0f",
         ),
         "Proporção de Óbitos com Causas Definidas (%)": (
-            None,  # coluna não usada diretamente
+            None,
             "ratio",
             "Proporção (%)",
             ".1f",
@@ -858,6 +1444,12 @@ def show_page_saude(
             "obitos_causa_nao_definida",
             "obitos_totais",
             100,
+        ),
+        "Taxa de Mortalidade Prematura por DCNT": (
+            "dcnt",
+            "mortality_rate",
+            "Taxa por 100 mil hab.",
+            ".1f",
         ),
     }
 
@@ -916,6 +1508,12 @@ def show_page_saude(
             "obitos_neonatal",
             "nascimentos_total",
             1000,
+        ),
+        "Número de casos novos de sífilis congênita em menores de 1 ano de idade": (
+            "casos_sifilis_congenita",
+            "sum",
+            "Nº de casos",
+            ",.0f",
         ),
     }
     INDICADORES_ATENCAO_BASICA_MENSAL = {
@@ -1006,10 +1604,20 @@ def show_page_saude(
     }
 
     INDICADORES_MEDICOS = {
+        "Número Total de Médicos": (
+            "qtd_medicos",
+            "Núm. de Médicos",
+            ",.0f",
+        ),
         "Número de Médicos que atendem pelo SUS": (
             "qtd_medicos_sus",
             "Núm. de Médicos",
             ",.0f",
+        ),
+        "Percentual de Médicos que atendem pelo SUS (%)": (
+            "percentual_medicos_sus",
+            "Percentual (%)",
+            ",.1f",
         ),
         "Número de Médicos que atendem pelo SUS por mil habitantes": (
             "qtd_medicos_sus_mil_hab",
@@ -1019,10 +1627,20 @@ def show_page_saude(
     }
 
     INDICADORES_LEITOS = {
+        "Número Total de Leitos de Internação e Complementares": (
+            "qtd_leitos",
+            "Núm. de Leitos",
+            ",.0f",
+        ),
         "Número de Leitos de Internação e Complementares disponíveis pelo SUS": (
             "qtd_leitos_sus",
             "Núm. de Leitos",
             ",.0f",
+        ),
+        "Percentual de Leitos disponíveis pelo SUS (%)": (
+            "percentual_leitos_sus",
+            "Percentual (%)",
+            ",.1f",
         ),
         "Número de Leitos disponíveis pelo SUS por mil habitantes": (
             "qtd_leitos_sus_mil_hab",
@@ -1042,6 +1660,7 @@ def show_page_saude(
         key_prefix="obitos",
         expander_state_key="obitos_expander_state",
         callback_func=obitos_callback,
+        df_mort_prematura=df_saude_mort_prematura,
     )
 
     display_saude_expander(
@@ -1108,7 +1727,7 @@ def show_page_saude(
 
     display_saude_anual_expander(
         df_filtrado=df_saude_medicos,
-        titulo_expander="Médicos no SUS",
+        titulo_expander="Médicos",
         dicionario_indicadores=INDICADORES_MEDICOS,
         key_prefix="medicos",
         expander_state_key="medicos_expander_state",
@@ -1117,7 +1736,7 @@ def show_page_saude(
 
     display_saude_anual_expander(
         df_filtrado=df_saude_leitos,
-        titulo_expander="Leitos de Internação e Complementares no SUS",
+        titulo_expander="Leitos de Internação e Complementares",
         dicionario_indicadores=INDICADORES_LEITOS,
         key_prefix="leitos",
         expander_state_key="leitos_expander_state",

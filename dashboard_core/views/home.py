@@ -28,6 +28,7 @@ def show_page_home(
     df_vinculos,
     df_pib,
     df_saude_mensal,
+    df_saude_mort_prematura,
     df_populacao_densidade,
     df_populacao_sexo_idade,
     municipio_de_interesse,
@@ -179,6 +180,17 @@ def show_page_home(
         data_saude = f"{MESES_DIC[ult_mes_saude]} de {ult_ano_saude}"
     except Exception:
         data_saude = "Não disponível"
+
+    try:
+        ult_ano_mort_prem = df_saude_mort_prematura["ano"].max()
+        ult_quad_mort_prem = df_saude_mort_prematura[
+            df_saude_mort_prematura["ano"] == ult_ano_mort_prem
+        ]["quadrimestre"].max()
+        data_mort_prematura = (
+            f"{ult_quad_mort_prem}º Quadrimestre de {ult_ano_mort_prem}"
+        )
+    except Exception:
+        data_mort_prematura = "Não disponível"
 
     try:
         data_demografia_pop = str(int(df_populacao_densidade["ano"].max()))
@@ -381,7 +393,7 @@ def show_page_home(
             
             *Frequência: **Mensal** e **Anual*** 
             
-            *Últimos dados: **{data_saude}***
+            *Últimos dados: **Indicadores Mensais:** **{data_saude}** | **Mortalidade Prematura (DCNT):** **{data_mort_prematura}***
             """
         )
         st.button(
