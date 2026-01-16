@@ -389,7 +389,7 @@ def show_page_home(
         st.markdown(
             f"""
             #### 🏥 Saúde
-            Indicadores de saúde pública, incluindo nascimentos, óbitos, cobertura vacinal, leitos e despesas. Dados provenientes de fontes como a Secretaria de Saúde do RS, DATASUS e CNES.
+            Indicadores de saúde pública, incluindo nascimentos, óbitos, internações hospitalares, cobertura vacinal, leitos e despesas. Dados provenientes de fontes como a Secretaria de Saúde do RS, DATASUS e CNES.
             
             *Frequência: **Mensal** e **Anual*** 
             

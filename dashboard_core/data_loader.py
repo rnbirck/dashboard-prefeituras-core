@@ -996,6 +996,36 @@ def carregar_dados_saude_vacinas(municipios, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_saude_internacoes_residentes(municipios, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_saude_internacoes_residentes")
+        .select("*")
+        .in_("municipio", list(municipios))
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_saude_sisab(municipios, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_saude_sisab")
+        .select("*")
+        .in_("municipio", list(municipios))
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_pib_municipios(municipios):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")

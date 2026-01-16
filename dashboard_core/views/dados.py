@@ -57,6 +57,8 @@ def show_page_dados(
     df_saude_medicos,
     df_saude_mort_prematura,
     df_saude_obitos_tipo,
+    df_saude_internacoes_residentes,
+    df_saude_sisab,
     # --- DataFrame da Página PIB ---
     df_pib_municipios,
     # --- DataFrames da Página Demografia ---
@@ -550,7 +552,7 @@ def show_page_dados(
         # --- DADOS MENSAIS ---
         st.subheader("Dados Mensais de Saúde")
         st.markdown(
-            "Indicadores atualizados mensalmente (ex.: óbitos, nascimentos, atenção básica, internações) e dados quadrimestrais de mortalidade prematura por DCNT."
+            "Indicadores atualizados mensalmente (ex.: óbitos, nascimentos, atenção básica, internações) e dados quadrimestrais de mortalidade prematura por DCNT e indicadores SISAB."
         )
         col_sd_a, col_sd_b = st.columns(2)
 
@@ -562,12 +564,26 @@ def show_page_dados(
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
+            st.download_button(
+                label="📥 Internações Hospitalares por Residentes",
+                data=to_excel(df_saude_internacoes_residentes),
+                file_name=f"saude_internacoes_residentes_{municipio_de_interesse}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
 
         with col_sd_b:
             st.download_button(
                 label="📥 Mortalidade Prematura por DCNT",
                 data=to_excel(df_saude_mort_prematura),
                 file_name=f"saude_mortalidade_prematura_dcnt_{municipio_de_interesse}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            st.download_button(
+                label="📥 Indicadores SISAB (Quadrimestrais)",
+                data=to_excel(df_saude_sisab),
+                file_name=f"saude_sisab_{municipio_de_interesse}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )

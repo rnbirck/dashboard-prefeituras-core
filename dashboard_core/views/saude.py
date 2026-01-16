@@ -66,6 +66,14 @@ def atencao_basica_mensal_callback():
     set_expander_open("atencao_basica_mensal_expander_state")
 
 
+def internacoes_residentes_callback():
+    set_expander_open("internacoes_residentes_expander_state")
+
+
+def sisab_callback():
+    set_expander_open("sisab_expander_state")
+
+
 def acidente_trabalho_callback():
     set_expander_open("acidente_trabalho_expander_state")
 
@@ -1035,6 +1043,122 @@ def display_mortalidade_prematura(
                 st.plotly_chart(fig, use_container_width=True)
 
 
+def display_sisab_expander(
+    df_sisab,
+    titulo_expander,
+    dicionario_indicadores,
+    key_prefix,
+    expander_state_key,
+    callback_func,
+):
+    """Função especializada para exibir indicadores SISAB (dados quadrimestrais)."""
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
+        # Disclaimer sobre a descontinuação da série
+        st.warning(
+            "⚠️ **Atenção:** A série histórica do SISAB foi descontinuada pelo Ministério da Saúde. "
+            "Os dados apresentados referem-se ao período em que o sistema estava ativo."
+        )
+
+        if df_sisab is None or df_sisab.empty:
+            st.warning("Dados SISAB não disponíveis.")
+            return
+
+        # Seletor de indicador
+        indicador_selecionado = st.selectbox(
+            "Selecione um indicador para visualizar:",
+            options=list(dicionario_indicadores.keys()),
+            key=f"{key_prefix}_selectbox",
+            on_change=callback_func,
+        )
+
+        coluna_selecionada, label_y, data_format = dicionario_indicadores[
+            indicador_selecionado
+        ]
+
+        # Preparar dados
+        df_com_dados = df_sisab[df_sisab[coluna_selecionada].notna()].copy()
+
+        if df_com_dados.empty:
+            st.warning(f"Não há dados disponíveis para {indicador_selecionado}.")
+            return
+
+        # Obter anos disponíveis
+        anos_disponiveis = sorted(df_com_dados["ano"].unique())
+
+        if len(anos_disponiveis) < 2:
+            anos_padrao = anos_disponiveis
+        else:
+            # Seleciona os dois últimos anos como padrão
+            anos_padrao = anos_disponiveis[-2:]
+
+        # Seletor de range de anos em coluna de 60%
+        col_slider, col_empty = st.columns([0.6, 0.4])
+        with col_slider:
+            anos_selecionados = st.slider(
+                "Selecione o período de análise:",
+                min_value=int(min(anos_disponiveis)),
+                max_value=int(max(anos_disponiveis)),
+                value=(int(min(anos_padrao)), int(max(anos_padrao))),
+                key=f"{key_prefix}_anos_slider",
+            )
+
+        # Filtrar dados pelos anos selecionados
+        df_filtrado = df_com_dados[
+            (df_com_dados["ano"] >= anos_selecionados[0])
+            & (df_com_dados["ano"] <= anos_selecionados[1])
+        ].copy()
+
+        if df_filtrado.empty:
+            st.warning("Não há dados para o período selecionado.")
+            return
+
+        # Criar coluna de período (ano + quadrimestre)
+        df_filtrado["periodo"] = (
+            df_filtrado["ano"].astype(str)
+            + " - Q"
+            + df_filtrado["quadrimestre"].astype(str)
+        )
+
+        # Ordenar por ano e quadrimestre para garantir ordem cronológica
+        df_filtrado = df_filtrado.sort_values(["ano", "quadrimestre"])
+
+        # Pivotar dados
+        df_pivot = df_filtrado.pivot(
+            index="periodo", columns="municipio", values=coluna_selecionada
+        )
+
+        # Verificar se há dados para exibir
+        if df_pivot.empty:
+            st.warning("Não há dados suficientes para gerar o gráfico.")
+            return
+
+        # Determinar formato de hover
+        hover_format = (
+            f",.{int(data_format.split('.')[-1][0]) + 1}f"
+            if "." in data_format
+            else ",.0f"
+        )
+
+        # Título
+        titulo_centralizado(indicador_selecionado, 5)
+
+        # Criar gráfico
+        fig = criar_grafico_barras(
+            df=df_pivot,
+            titulo="",
+            label_y=label_y,
+            barmode="group",
+            height=400,
+            data_label_format=data_format,
+            hover_label_format=hover_format,
+            color_map=CORES_MUNICIPIOS,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+
 def display_saude_expander(
     df_filtrado,
     titulo_expander,
@@ -1361,8 +1485,10 @@ def show_page_saude(
     df_saude_despesas,
     df_saude_leitos,
     df_saude_medicos,
+    df_saude_internacoes_residentes=None,
     df_saude_mort_prematura=None,
     df_obitos_tipo=None,
+    df_saude_sisab=None,
 ):
     # 1. Inicialização dos estados dos expanders
     if "obitos_expander_state" not in st.session_state:
@@ -1373,6 +1499,10 @@ def show_page_saude(
         st.session_state.gestantes_expander_state = False
     if "atencao_basica_mensal_expander_state" not in st.session_state:
         st.session_state.atencao_basica_mensal_expander_state = False
+    if "internacoes_residentes_expander_state" not in st.session_state:
+        st.session_state.internacoes_residentes_expander_state = False
+    if "sisab_expander_state" not in st.session_state:
+        st.session_state.sisab_expander_state = False
     if "acidente_trabalho_expander_state" not in st.session_state:
         st.session_state.acidente_trabalho_expander_state = False
     if "despesas_expander_state" not in st.session_state:
@@ -1517,12 +1647,6 @@ def show_page_saude(
         ),
     }
     INDICADORES_ATENCAO_BASICA_MENSAL = {
-        "Internações Totais": (
-            "internacoes_totais",
-            "sum",
-            "Núm. de Internações",
-            ",.0f",
-        ),
         "Internações por Condições Sensíveis à Atenção Básica - ICSAB": (
             "internacoes_icsab",
             "sum",
@@ -1539,6 +1663,68 @@ def show_page_saude(
             100,
         ),
     }
+    INDICADORES_INTERNACOES_HOSPITALARES = {
+        "Total de Internações no Município": (
+            "internacoes_total",
+            "sum",
+            "Núm. de Internações",
+            ",.0f",
+        ),
+        "Total de Internações no Município de Residentes": (
+            "internacoes_municipio",
+            "sum",
+            "Núm. de Internações",
+            ",.0f",
+        ),
+        "Participação de Residentes no Total de Internações Hospitalares (%)": (
+            None,
+            "ratio",
+            "Participação (%)",
+            ".1f",
+            "internacoes_municipio",
+            "internacoes_total",
+            100,
+        ),
+    }
+
+    INDICADORES_SISAB = {
+        "Proporção de gestantes com pelo menos 6 consultas pré-natal realizadas, sendo a 1ª até a 12ª semana de gestação": (
+            "gestantes_pre_natal",
+            "Proporção (%)",
+            ".1f",
+        ),
+        "Proporção de gestantes com realização de exames para sífilis e HIV": (
+            "gestantes_sifilis",
+            "Proporção (%)",
+            ".1f",
+        ),
+        "Proporção de gestantes com atendimento odontológico realizado": (
+            "gestantes_odonto",
+            "Proporção (%)",
+            ".1f",
+        ),
+        "Proporção de mulheres com coleta de citopatológico na APS": (
+            "mulheres_cito",
+            "Proporção (%)",
+            ".1f",
+        ),
+        "Proporção de crianças de 1 ano de idade vacinadas na APS contra Difteria, Tétano, Coqueluche, Hepatite B, infecções causadas por haemophilus influenzae tipo b e Poliomielite inativada": (
+            "criancas_vacinadas_aps",
+            "Proporção (%)",
+            ".1f",
+        ),
+        "Proporção de pessoas com hipertensão, com consulta e pressão arterial aferida no semestre": (
+            "consultas_hipertensao",
+            "Proporção (%)",
+            ".1f",
+        ),
+        "Proporção de pessoas com diabetes, com consulta e hemoglobina glicada solicitada no semestre": (
+            "consultas_diabetes",
+            "Proporção (%)",
+            ".1f",
+        ),
+    }
+
     INDICADORES_ACIDENTE_DE_TRABALHO = {
         "Notificações Totais": (
             "notificacoes_acidentes_trab",
@@ -1688,6 +1874,26 @@ def show_page_saude(
         key_prefix="atencao_basica_mensal",
         expander_state_key="atencao_basica_mensal_expander_state",
         callback_func=atencao_basica_mensal_callback,
+    )
+
+    display_saude_expander(
+        df_filtrado=df_saude_internacoes_residentes,
+        titulo_expander="Internações Hospitalares",
+        dicionario_indicadores=INDICADORES_INTERNACOES_HOSPITALARES,
+        key_prefix="internacoes_residentes",
+        expander_state_key="internacoes_residentes_expander_state",
+        callback_func=internacoes_residentes_callback,
+    )
+
+    # Disclaimer sobre descontinuação do SISAB
+
+    display_sisab_expander(
+        df_sisab=df_saude_sisab,
+        titulo_expander="Indicadores SISAB - Sistema de Informação em Saúde para a Atenção Básica (Série Descontinuada)",
+        dicionario_indicadores=INDICADORES_SISAB,
+        key_prefix="sisab",
+        expander_state_key="sisab_expander_state",
+        callback_func=sisab_callback,
     )
 
     display_saude_expander(

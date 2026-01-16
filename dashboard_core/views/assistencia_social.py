@@ -149,6 +149,357 @@ def preparar_dados_graficos_assistencia(
 # ==============================================================================
 
 
+def display_secao_cadastro_unico(
+    df,
+    titulo_expander,
+    key_prefix,
+    expander_state_key,
+    callback_func,
+    anos_visuais=None,
+):
+    """
+    Exibe seção específica para Cadastro Único com opções de população/famílias e quantidade/percentual.
+    """
+    if expander_state_key not in st.session_state:
+        st.session_state[expander_state_key] = False
+
+    if anos_visuais is None:
+        anos_visuais = anos_de_interesse
+
+    # Dicionário de indicadores com mapeamento para colunas
+    INDICADORES_CAD = {
+        "Número de Pessoas cadastradas no CadÚnico": {
+            "familias": None,
+            "populacao": "total_pessoas",
+            "percentual": "perc_pop_cad_unico",
+        },
+        "Número de Famílias cadastradas no CadÚnico": {
+            "familias": "total_familias",
+            "populacao": None,
+            "percentual": "perc_pop_cad_unico",
+        },
+        "Famílias cadastradas em situação de pobreza": {
+            "familias": "qtd_fam_pob",
+            "populacao": None,
+            "percentual": "perc_pessoas_fam_pob",
+        },
+        "Famílias cadastradas de baixa renda": {
+            "familias": "qtd_fam_baixa_renda",
+            "populacao": None,
+            "percentual": "perc_pessoas_fam_baixa_renda",
+        },
+        "Famílias cadastradas com renda per capita até meio salário-mínimo": {
+            "familias": "qtd_fam_ate_meio_sm",
+            "populacao": None,
+            "percentual": "perc_pessoas_fam_ate_meio_sm",
+        },
+        "Famílias cadastradas com renda per capita acima de meio salário-mínimo": {
+            "familias": "qtd_fam_acima_meio_sm",
+            "populacao": None,
+            "percentual": "perc_pessoas_fam_acima_meio_sm",
+        },
+    }
+
+    with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
+        st.info("ℹ️ Dados do CadÚnico para abril de 2025 não foram divulgados.")
+
+        # --- 1. SELETOR DE INDICADOR ---
+        indicador_selecionado = st.selectbox(
+            "Selecione um indicador:",
+            options=list(INDICADORES_CAD.keys()),
+            key=f"{key_prefix}_selectbox_indicador",
+            on_change=callback_func,
+        )
+
+        # --- 2. SELETOR DE MÉTRICA ---
+        # Determina opções disponíveis baseado no indicador selecionado
+        if indicador_selecionado in [
+            "Número de Pessoas cadastradas no CadÚnico",
+            "Número de Famílias cadastradas no CadÚnico",
+        ]:
+            # Para totais, oferece Quantidade e Percentual
+            metrica_opcoes = ["Quantidade", "Percentual (% da população total)"]
+        else:
+            # Para classificações de família, oferece Famílias e Percentual
+            metrica_opcoes = ["Famílias", "Percentual (% da população total)"]
+
+        # Inicializa o estado da métrica se não existir
+        key_metrica = f"{key_prefix}_metrica_state"
+        if key_metrica not in st.session_state:
+            st.session_state[key_metrica] = metrica_opcoes[0]
+
+        metrica_selecionada = st.segmented_control(
+            "Métrica:",
+            options=metrica_opcoes,
+            selection_mode="single",
+            key=key_metrica,
+        )
+
+        # Fallback caso não tenha seleção
+        if not metrica_selecionada:
+            metrica_selecionada = metrica_opcoes[0]
+
+        # Determina a coluna a ser usada
+        is_percentage = metrica_selecionada == "Percentual (% da população total)"
+
+        if is_percentage:
+            coluna_selecionada = INDICADORES_CAD[indicador_selecionado]["percentual"]
+            label_desc = "Percentual (% da população total)"
+        elif metrica_selecionada == "Quantidade":
+            # Para "Número de Pessoas" ou "Número de Famílias"
+            if indicador_selecionado == "Número de Pessoas cadastradas no CadÚnico":
+                coluna_selecionada = INDICADORES_CAD[indicador_selecionado]["populacao"]
+                label_desc = "População"
+            else:
+                coluna_selecionada = INDICADORES_CAD[indicador_selecionado]["familias"]
+                label_desc = "Famílias"
+        else:  # metrica_selecionada == "Famílias"
+            coluna_selecionada = INDICADORES_CAD[indicador_selecionado]["familias"]
+            label_desc = "Famílias"
+
+        # Define rótulos
+        label_var = "Variação (p.p.)" if is_percentage else "Variação (%)"
+        fmt_var = "+,.2f" if is_percentage else "+,.1f"
+
+        # --- 3. PREPARAÇÃO DOS DADOS ---
+        (
+            hist_abs,
+            acum_abs,
+            acum_var_abs,
+            anual_abs,
+            anual_var_abs,
+            ult_ano,
+            ult_mes,
+        ) = preparar_dados_graficos_assistencia(
+            df, coluna_selecionada, anos_visuais, is_percentage=is_percentage
+        )
+
+        # Filtra anos disponíveis baseado nos dados reais do DataFrame
+        anos_com_dados = (
+            sorted(
+                df[coluna_selecionada]
+                .notna()
+                .loc[lambda x: x]
+                .index.to_series()
+                .apply(lambda idx: df.loc[idx, "ano"])
+                .unique()
+                .tolist(),
+                reverse=True,
+            )
+            if not df.empty and coluna_selecionada in df.columns
+            else []
+        )
+
+        # Intersecção entre anos de visualização e anos com dados
+        anos_disponiveis = (
+            sorted([ano for ano in anos_visuais if ano in anos_com_dados], reverse=True)
+            if anos_com_dados
+            else sorted(list(anos_visuais), reverse=True)
+        )
+
+        # --- 4. NAVEGAÇÃO ENTRE "ABAS" ---
+        key_main_tab = f"main_tab_nav_{key_prefix}"
+        if key_main_tab not in st.session_state:
+            st.session_state[key_main_tab] = "Evolução Mensal"
+
+        aba_selecionada = st.pills(
+            "Selecione o tipo de análise temporal:",
+            options=["Evolução Mensal", "Mês", "Anual"],
+            selection_mode="single",
+            key=key_main_tab,
+            width=600,
+        )
+
+        if not aba_selecionada:
+            aba_selecionada = "Evolução Mensal"
+
+        # Título do gráfico
+        if is_percentage:
+            indicador_titulo = f"{indicador_selecionado} - Percentual"
+        else:
+            indicador_titulo = f"{indicador_selecionado}"
+
+        # --- CONTEÚDO DA ABA 1: EVOLUÇÃO ---
+        if aba_selecionada == "Evolução Mensal":
+            with st.container():
+                col_ano, _ = st.columns([0.5, 0.5])
+
+                with col_ano:
+                    ano_hist = st.selectbox(
+                        "Ano:",
+                        options=anos_disponiveis,
+                        index=0,
+                        key=f"hist_ano_{key_prefix}",
+                        on_change=callback_func,
+                        label_visibility="visible",
+                    )
+
+                df_plot = hist_abs
+                lbl_y = label_desc
+                fmt = ",.1f" if is_percentage else ",.0f"
+                hover = ",.2f" if is_percentage else ",.0f"
+
+                titulo_grafico = f"Evolução Mensal - {indicador_titulo} - {ano_hist}"
+
+                titulo_centralizado(titulo_grafico, 5)
+
+                if not df_plot.empty:
+                    df_plot_ano = df_plot[df_plot.index.year == ano_hist]
+                    if not df_plot_ano.empty:
+                        df_plot_ano.index = [
+                            f"{MESES_DIC[d.month][:3]}/{str(d.year)[2:]}"
+                            for d in df_plot_ano.index
+                        ]
+                        fig = criar_grafico_barras(
+                            df=df_plot_ano,
+                            titulo="",
+                            label_y=lbl_y,
+                            barmode="group",
+                            height=400,
+                            data_label_format=fmt,
+                            color_map=CORES_MUNICIPIOS,
+                            hover_label_format=hover,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info(f"Sem dados mensais para {ano_hist}.")
+                else:
+                    st.warning("Sem dados disponíveis.")
+
+        # --- CONTEÚDO DA ABA 2: MÊS ---
+        elif aba_selecionada == "Mês":
+            if ult_mes:
+                with st.container():
+                    col_opt_ac, _ = st.columns([0.6, 0.4])
+
+                    with col_opt_ac:
+                        key_acum = f"acum_mode_{key_prefix}"
+                        if key_acum not in st.session_state:
+                            st.session_state[key_acum] = label_desc
+
+                        modo_acum = st.segmented_control(
+                            "Opções:",
+                            options=[label_desc, label_var],
+                            key=key_acum,
+                            selection_mode="single",
+                            label_visibility="collapsed",
+                        )
+
+                        if not modo_acum:
+                            modo_acum = label_desc
+
+                    periodo_txt = f"{MESES_DIC[ult_mes]}"
+
+                    if modo_acum == label_var:
+                        titulo_centralizado(
+                            f"{indicador_titulo} - {label_var} - {periodo_txt}", 5
+                        )
+                        df_var_plot = acum_var_abs.copy().sort_index(ascending=True)
+                        df_var_plot = df_var_plot.dropna(how="all")
+                        df_var_plot.index = [
+                            f"{MESES_DIC[ult_mes]}/{str(y)[2:]}"
+                            for y in df_var_plot.index
+                        ]
+
+                        fig = criar_grafico_barras(
+                            df=df_var_plot,
+                            titulo="",
+                            label_y=label_var,
+                            barmode="group",
+                            height=400,
+                            data_label_format=fmt_var,
+                            color_map=CORES_MUNICIPIOS,
+                            hover_label_format=fmt_var,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        df_plot = acum_abs.copy()
+                        lbl_y = label_desc
+                        fmt = ",.1f" if is_percentage else ",.0f"
+                        hover = ",.2f" if is_percentage else ",.0f"
+
+                        titulo_grafico = f"{indicador_titulo} em {periodo_txt}"
+
+                        titulo_centralizado(titulo_grafico, 5)
+
+                        df_plot.index = [
+                            f"{MESES_DIC[ult_mes]}/{str(y)[2:]}" for y in df_plot.index
+                        ]
+
+                        fig = criar_grafico_barras(
+                            df=df_plot,
+                            titulo="",
+                            label_y=lbl_y,
+                            barmode="group",
+                            height=400,
+                            data_label_format=fmt,
+                            color_map=CORES_MUNICIPIOS,
+                            hover_label_format=hover,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Dados no mês não disponíveis.")
+
+        # --- CONTEÚDO DA ABA 3: ANUAL ---
+        elif aba_selecionada == "Anual":
+            with st.container():
+                col_opt_an, _ = st.columns([0.6, 0.4])
+
+                with col_opt_an:
+                    key_anual = f"anual_mode_{key_prefix}"
+                    if key_anual not in st.session_state:
+                        st.session_state[key_anual] = label_desc
+
+                    modo_anual = st.segmented_control(
+                        "Opções:",
+                        options=[label_desc, label_var],
+                        key=key_anual,
+                        selection_mode="single",
+                        label_visibility="collapsed",
+                    )
+
+                    if not modo_anual:
+                        modo_anual = label_desc
+
+                if modo_anual == label_var:
+                    titulo_centralizado(f"{indicador_titulo} - {label_var} - Anual", 5)
+                    df_var_plot = anual_var_abs.copy()
+                    df_var_plot.index = [str(y) for y in df_var_plot.index]
+
+                    fig = criar_grafico_barras(
+                        df=df_var_plot,
+                        titulo="",
+                        label_y=label_var,
+                        barmode="group",
+                        height=400,
+                        data_label_format=fmt_var,
+                        color_map=CORES_MUNICIPIOS,
+                        hover_label_format=fmt_var,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    df_plot = anual_abs.copy()
+                    lbl_y = label_desc
+                    fmt = ",.1f" if is_percentage else ",.0f"
+                    hover = ",.2f" if is_percentage else ",.0f"
+
+                    titulo_centralizado(f"{indicador_titulo} - Anual", 5)
+
+                    df_plot.index = [str(y) for y in df_plot.index]
+
+                    fig = criar_grafico_barras(
+                        df=df_plot,
+                        titulo="",
+                        label_y=lbl_y,
+                        barmode="group",
+                        height=400,
+                        data_label_format=fmt,
+                        color_map=CORES_MUNICIPIOS,
+                        hover_label_format=hover,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+
 def display_secao_assistencia_padrao(
     df,
     titulo_expander,
@@ -169,10 +520,6 @@ def display_secao_assistencia_padrao(
         anos_visuais = anos_de_interesse
 
     with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
-        # Mensagem informativa específica para Cadastro Único
-        if key_prefix == "cad":
-            st.info("ℹ️ Dados do CadÚnico para abril de 2025 não foram divulgados.")
-
         # Mensagem informativa específica para Novo Bolsa Família
         if key_prefix == "bolsa":
             st.info(
@@ -188,14 +535,9 @@ def display_secao_assistencia_padrao(
         )
         coluna_selecionada = dicionario_indicadores[indicador_selecionado]
 
-        # Verifica se é o indicador de vulnerabilidade (percentual)
-        is_vuln = (
-            indicador_selecionado == "População em situação de vulnerabilidade (%)"
-        )
-
         # Define rótulos de variação
-        label_var = "Variação (p.p.)" if is_vuln else "Variação (%)"
-        fmt_var = "+,.2f" if is_vuln else "+,.1f"
+        label_var = "Variação (%)"
+        fmt_var = "+,.1f"
 
         # --- 2. PREPARAÇÃO DOS DADOS ---
         (
@@ -207,7 +549,7 @@ def display_secao_assistencia_padrao(
             ult_ano,
             ult_mes,
         ) = preparar_dados_graficos_assistencia(
-            df, coluna_selecionada, anos_visuais, is_percentage=is_vuln
+            df, coluna_selecionada, anos_visuais, is_percentage=False
         )
 
         # Filtra anos disponíveis baseado nos dados reais do DataFrame
@@ -269,8 +611,8 @@ def display_secao_assistencia_padrao(
 
                 df_plot = hist_abs
                 lbl_y = label_desc
-                fmt = ",.1f" if is_vuln else ",.0f"
-                hover = ",.2f" if is_vuln else ",.0f"
+                fmt = ",.0f"
+                hover = ",.0f"
 
                 titulo_grafico = (
                     f"Evolução Mensal - {indicador_selecionado} - {ano_hist}"
@@ -353,8 +695,8 @@ def display_secao_assistencia_padrao(
                     else:
                         df_plot = acum_abs.copy()
                         lbl_y = label_desc
-                        fmt = ",.1f" if is_vuln else ",.0f"
-                        hover = ",.2f" if is_vuln else ",.0f"
+                        fmt = ",.0f"
+                        hover = ",.0f"
 
                         titulo_grafico = f"{indicador_selecionado} em {periodo_txt}"
 
@@ -424,8 +766,8 @@ def display_secao_assistencia_padrao(
                 else:
                     df_plot = anual_abs
                     lbl_y = f"{label_desc}"
-                    fmt = ",.1f" if is_vuln else ",.0f"
-                    hover = ",.2f" if is_vuln else ",.0f"
+                    fmt = ",.0f"
+                    hover = ",.0f"
 
                     titulo_grafico = f"{indicador_selecionado} - Anual"
 
@@ -518,17 +860,7 @@ def show_page_assistencia_social(df_cad, df_bolsa, municipio_interesse):
 
     titulo_centralizado("Dashboard de Assistência Social", 1)
 
-    # Dicionários
-    INDICADORES_CAD = {
-        "Número de Pessoas": "total_pessoas",
-        "Número de Famílias": "total_familias",
-        "Quantidade de famílias em situação de pobreza": "qtd_fam_pob",
-        "Quantidade de famílias de baixa renda": "qtd_fam_baixa_renda",
-        "Quantidade de famílias com renda per capita mensal de até meio salário-mínimo": "qtd_fam_ate_meio_sm",
-        "Quantidade de famílias com renda per capita mensal acima de meio salário-mínimo": "qtd_fam_acima_meio_sm",
-        "População em situação de vulnerabilidade (%)": "pop_vulnerabilidade",
-    }
-
+    # Dicionário apenas para Bolsa Família
     INDICADORES_BOLSA = {
         "Número de Beneficiários": "qtd_beneficiados",
         "Valor Total do Benefício": "valor_total_beneficio",
@@ -541,15 +873,13 @@ def show_page_assistencia_social(df_cad, df_bolsa, municipio_interesse):
     )
     titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
 
-    # CADASTRO ÚNICO
-    display_secao_assistencia_padrao(
+    # CADASTRO ÚNICO - usando nova função especializada
+    display_secao_cadastro_unico(
         df=df_cad,
         titulo_expander="Cadastro Único",
-        dicionario_indicadores=INDICADORES_CAD,
         key_prefix="cad",
         expander_state_key="cad_expander_state",
         callback_func=cad_callback,
-        label_desc="Total",
         anos_visuais=anos_de_interesse,
     )
 
