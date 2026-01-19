@@ -123,7 +123,7 @@ def preparar_dados_graficos_saude_mensal(
     df_anual, df_anual_var = pd.DataFrame(), pd.DataFrame()
     ult_ano, ult_mes = None, None
 
-    if not df_filtrado.empty:
+    if df_filtrado is not None and not df_filtrado.empty:
         # Para cálculo de proporção/taxa, não filtra NaN pois vai calcular a partir de numerador e denominador
         # Para soma, filtra registros com dados válidos
         if metodo_agg == "ratio":
@@ -1173,6 +1173,11 @@ def display_saude_expander(
         st.session_state[expander_state_key] = False
 
     with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
+        # Verifica se os dados estão disponíveis
+        if df_filtrado is None or df_filtrado.empty:
+            st.warning(f"Dados não disponíveis para {titulo_expander}.")
+            return
+
         indicador_selecionado = st.selectbox(
             "Selecione um indicador para visualizar:",
             options=list(dicionario_indicadores.keys()),
