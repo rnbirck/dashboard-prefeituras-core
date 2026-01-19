@@ -118,12 +118,21 @@ def preparar_dados_graficos_saude_mensal(
         col_denominador: Nome da coluna denominador para cálculo de proporção/taxa
         fator_multiplicacao: Fator para multiplicar o resultado (ex: 100 para %, 1000 para taxas por mil)
     """
+    # Inicializa DataFrames vazios como retorno padrão
     df_hist = pd.DataFrame()
     df_acum, df_acum_var = pd.DataFrame(), pd.DataFrame()
     df_anual, df_anual_var = pd.DataFrame(), pd.DataFrame()
     ult_ano, ult_mes = None, None
 
-    if df_filtrado is not None and not df_filtrado.empty:
+    # VERIFICAÇÃO CRÍTICA: Retorna valores padrão se df_filtrado for None ou vazio
+    if df_filtrado is None:
+        return df_hist, df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
+
+    if df_filtrado.empty:
+        return df_hist, df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
+
+    # Continua o processamento normal se houver dados
+    if True:  # Mantém a estrutura original de indentação
         # Para cálculo de proporção/taxa, não filtra NaN pois vai calcular a partir de numerador e denominador
         # Para soma, filtra registros com dados válidos
         if metodo_agg == "ratio":
