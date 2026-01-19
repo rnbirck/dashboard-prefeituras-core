@@ -194,6 +194,46 @@ def display_pib_vab_expander(
     if expander_state_key not in st.session_state:
         st.session_state[expander_state_key] = False  # Inicializa o estado
 
+    # Filtrar anos onde os dados de VAB estejam zerados (dados não atualizados)
+    colunas_vab = [
+        "valor_adicionado_bruto_agropecuaria_milhoes",
+        "valor_adicionado_bruto_industria_milhoes",
+        "valor_adicionado_bruto_servicos_milhoes",
+        "valor_adicionado_bruto_adm_milhoes",
+    ]
+
+    # Verificar se todas as colunas VAB existem
+    colunas_vab_existentes = [col for col in colunas_vab if col in df_filtrado.columns]
+
+    if colunas_vab_existentes:
+        # Armazenar anos originais para comparação
+        anos_originais = set(df_filtrado["ano"].unique())
+
+        # Soma total de VAB por ano - se for 0, significa que não há dados atualizados
+        df_filtrado = df_filtrado.copy()
+        df_filtrado["soma_vab"] = df_filtrado[colunas_vab_existentes].sum(axis=1)
+
+        # Manter apenas linhas onde há dados de VAB (soma > 0)
+        df_filtrado = df_filtrado[df_filtrado["soma_vab"] > 0].drop(
+            columns=["soma_vab"]
+        )
+
+        if df_filtrado.empty:
+            st.warning(
+                "⚠️ Não há dados de Valor Adicionado Bruto disponíveis para o período selecionado."
+            )
+            return
+
+        # Verificar se algum ano foi excluído e informar o usuário
+        anos_com_dados = set(df_filtrado["ano"].unique())
+        anos_excluidos = anos_originais - anos_com_dados
+
+        if anos_excluidos:
+            anos_exc_str = ", ".join(sorted([str(ano) for ano in anos_excluidos]))
+            st.info(
+                f"ℹ️ Anos excluídos da análise de VAB por falta de dados: {anos_exc_str}"
+            )
+
     with st.expander(titulo_expander, expanded=st.session_state[expander_state_key]):
         opcoes_visualizacao = ["Estrutura VAB por Setor"] + list(vab_map.keys())
 
@@ -355,7 +395,7 @@ def show_page_pib(df_pib):
 
     INDICADORES_PIB_TOTAL = {
         "PIB (Milhões R$)": {
-            "Valor": ("pib_milhoes", "PIB (Milhões R$)", ",.0f", False, "linha"),
+            "Valor": ("pib_milhoes", "PIB (Milhões R$)", ",.0f", False, "barra"),
             "Taxa de Crescimento (%)": (
                 "tx_cresc_pib_mil",
                 "Crescimento (%)",
@@ -365,7 +405,7 @@ def show_page_pib(df_pib):
             ),
         },
         "PIB per Capita (R$)": {
-            "Valor": ("pib_per_capita", "PIB per Capita (R$)", ",.0f", False, "linha"),
+            "Valor": ("pib_per_capita", "PIB per Capita (R$)", ",.0f", False, "barra"),
             "Taxa de Crescimento (%)": (
                 "tx_cresc_pib_per_capita",
                 "Crescimento (%)",
@@ -392,7 +432,7 @@ def show_page_pib(df_pib):
                 "VAB (Milhões R$)",
                 ",.0f",
                 False,
-                "linha",
+                "barra",
             ),
             "Taxa de Crescimento (%)": (
                 "tx_cresc_agro_mil",
@@ -415,7 +455,7 @@ def show_page_pib(df_pib):
                 "VAB (Milhões R$)",
                 ",.0f",
                 False,
-                "linha",
+                "barra",
             ),
             "Taxa de Crescimento (%)": (
                 "tx_cresc_industria_mil",
@@ -438,7 +478,7 @@ def show_page_pib(df_pib):
                 "VAB (Milhões R$)",
                 ",.0f",
                 False,
-                "linha",
+                "barra",
             ),
             "Taxa de Crescimento (%)": (
                 "tx_cresc_servicos_mil",
@@ -461,7 +501,7 @@ def show_page_pib(df_pib):
                 "VAB (Milhões R$)",
                 ",.0f",
                 False,
-                "linha",
+                "barra",
             ),
             "Taxa de Crescimento (%)": (
                 "tx_cresc_adm_mil",
