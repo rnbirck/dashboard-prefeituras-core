@@ -569,6 +569,21 @@ def carregar_dados_renda_municipios(municipios, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_renda_ranking(municipios, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_renda_ranking_municipios")
+        .select("*")
+        .in_("municipio", list(municipios))
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_comex_anual(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")

@@ -5,6 +5,7 @@ from dashboard_core.utils import (
     MESES_DIC,
     checar_ult_ano_completo,
     criar_grafico_barras,
+    criar_grafico_linhas,
     criar_tabela_formatada,
     criar_tabela_formatada_mes,
     criar_tabela_formatada_ano,
@@ -1297,6 +1298,26 @@ def preparar_dados_renda_grafico(df, coluna_agregacao, coluna_valor):
 
 
 @st.cache_data
+def preparar_dados_ranking_renda(df_filtrado, coluna_selecionada):
+    """Prepara os dados para o gráfico de ranking de renda."""
+    if df_filtrado.empty:
+        return pd.DataFrame()
+
+    df_pivot = df_filtrado.pivot_table(
+        index="ano",
+        columns="municipio",
+        values=coluna_selecionada,
+        aggfunc="mean",
+        observed=False,
+        fill_value=0,
+    ).sort_index()
+
+    df_pivot.index = df_pivot.index.astype(str)
+
+    return df_pivot
+
+
+@st.cache_data
 def preparar_dados_renda_faixa_salarial(df):
     st.dataframe(df)
 
@@ -1379,6 +1400,67 @@ def render_renda_tabela_tab(df, coluna_index, titulo_secao, municipio_interesse)
         df_pivot.style.format(formatter).background_gradient(cmap="GnBu"),
         width="stretch",
     )
+
+
+def display_renda_ranking(df_renda_ranking):
+    """Exibe o expander com análise de participação na massa salarial do RS."""
+    with st.expander("Participação na Massa Salarial do RS", expanded=False):
+        if df_renda_ranking.empty:
+            st.warning("Sem dados de ranking disponíveis.")
+            return
+
+        col1, col2 = st.columns([0.5, 0.5])
+
+        with col1:
+            visualizacao_selecionada = st.segmented_control(
+                "Selecione a visualização:",
+                options=["Participação no RS (%)", "Posição no Ranking"],
+                selection_mode="single",
+                default="Participação no RS (%)",
+                key="ranking_renda_viz",
+            )
+
+        if not visualizacao_selecionada:
+            visualizacao_selecionada = "Participação no RS (%)"
+
+        if visualizacao_selecionada == "Participação no RS (%)":
+            titulo_centralizado("Participação na Massa Salarial do RS", 5)
+
+            df_grafico = preparar_dados_ranking_renda(
+                df_filtrado=df_renda_ranking,
+                coluna_selecionada="percentual_rs",
+            )
+
+            fig = criar_grafico_barras(
+                df=df_grafico,
+                titulo="",
+                label_y="Participação (%)",
+                height=400,
+                data_label_format=",.2f",
+                hover_label_format=",.2f",
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        else:  # Posição no Ranking
+            titulo_centralizado("Posição no Ranking de Massa Salarial do RS", 5)
+
+            df_grafico = preparar_dados_ranking_renda(
+                df_filtrado=df_renda_ranking,
+                coluna_selecionada="ranking",
+            )
+
+            fig = criar_grafico_linhas(
+                df=df_grafico,
+                titulo="",
+                label_y="Posição",
+                height=400,
+                data_label_format=",.0f",
+                hover_label_format=",.0f",
+                color_map=CORES_MUNICIPIOS,
+                reverse_y=True,
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 
 def display_renda(
@@ -1563,6 +1645,7 @@ def show_page_emprego(
     df_estoque_grau_instrucao,
     df_estoque_sexo,
     df_renda_mun,
+    df_renda_ranking,
     df_renda_sexo,
     df_renda_cnae,
     df_renda_faixa_salarial,
@@ -1630,3 +1713,5 @@ def show_page_emprego(
         df_renda_faixa_salarial=df_renda_faixa_salarial,
         municipio_interesse=municipio_de_interesse,
     )
+
+    display_renda_ranking(df_renda_ranking=df_renda_ranking)
