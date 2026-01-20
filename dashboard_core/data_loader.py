@@ -568,6 +568,7 @@ def carregar_dados_renda_municipios(municipios, anos):
     return pd.DataFrame(response.data)
 
 
+# --- Dados de Renda - Ranking ---
 @st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_renda_ranking(municipios, anos):
     if not supabase_client:
