@@ -41,6 +41,30 @@ def formatar_pct_br(x):
     return f"{x:+,.1f}%".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+# --- INDICADORES COM LEGENDA "QUANTO MAIOR, PIOR" ---
+INDICADORES_QUANTO_MAIOR_PIOR = {
+    "Óbitos com Causas Não Definidas",
+    "Proporção de Óbitos com Causas Não Definidas (%)",
+    "Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis",
+    "Taxa de Mortalidade Prematura por DCNT",
+    "Mortalidade Infantil (por mil nascidos vivos)",
+    "Proporção de Nascidos Vivos com Baixo Peso ao Nascer (%)",
+    "Proporção de Gravidez na Adolescência entre as Faixas Etárias 10 a 19 anos (%)",
+    "Coeficiente de Mortalidade Neonatal (por mil nascidos vivos)",
+    "Número de casos novos de sífilis congênita em menores de 1 ano de idade",
+}
+
+
+def adicionar_legenda_indicador(nome_indicador):
+    """Adiciona legenda explicativa se o indicador estiver na lista de 'quanto maior, pior'."""
+    if nome_indicador in INDICADORES_QUANTO_MAIOR_PIOR:
+        st.markdown(
+            "<p style='text-align: center; color: #666; font-style: italic; font-size: 0.9em; margin-top: -10px;'>"
+            "Quanto maior, pior</p>",
+            unsafe_allow_html=True,
+        )
+
+
 # --- FUNÇÕES DE CALLBACK ---
 
 
@@ -650,6 +674,9 @@ def display_mortalidade_prematura(
                     f"Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis - {label_var} - Até {periodo_txt}",
                     5,
                 )
+                adicionar_legenda_indicador(
+                    "Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis"
+                )
                 df_var_plot = (
                     df_acum_var.copy().sort_index(ascending=True).dropna(how="all")
                 )
@@ -675,6 +702,9 @@ def display_mortalidade_prematura(
                 titulo_centralizado(
                     f"Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis - Até {periodo_txt}",
                     5,
+                )
+                adicionar_legenda_indicador(
+                    "Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis"
                 )
                 df_plot = df_acum_pivot_filtrado.copy()
                 df_plot.index = (
@@ -771,6 +801,9 @@ def display_mortalidade_prematura(
                     f"Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis - {label_var} Anual",
                     5,
                 )
+                adicionar_legenda_indicador(
+                    "Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis"
+                )
                 df_var_plot = (
                     df_anual_var.copy().sort_index(ascending=True).dropna(how="all")
                 )
@@ -792,6 +825,9 @@ def display_mortalidade_prematura(
                 titulo_centralizado(
                     "Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis - Análise Anual",
                     5,
+                )
+                adicionar_legenda_indicador(
+                    "Taxa de Mortalidade Prematura por Doenças Crônicas Não Transmissíveis"
                 )
                 df_plot = df_anual_filtrado.copy().sort_index(ascending=False)
                 df_plot.index = df_plot.index.astype(str)
@@ -1153,6 +1189,7 @@ def display_sisab_expander(
 
         # Título
         titulo_centralizado(indicador_selecionado, 5)
+        adicionar_legenda_indicador(indicador_selecionado)
 
         # Criar gráfico
         fig = criar_grafico_barras(
@@ -1289,6 +1326,7 @@ def display_saude_expander(
                     titulo_centralizado(
                         f"{indicador_selecionado} - {label_var} - {periodo_txt}", 5
                     )
+                    adicionar_legenda_indicador(indicador_selecionado)
                     df_var_plot = df_acum_var.copy().sort_index(ascending=True)
 
                     # Remove anos com variação nula
@@ -1324,6 +1362,7 @@ def display_saude_expander(
                         f"{indicador_selecionado} - {periodo_txt}",
                         5,
                     )
+                    adicionar_legenda_indicador(indicador_selecionado)
                     fig = criar_grafico_barras(
                         df=df_plot,
                         titulo="",
@@ -1358,6 +1397,7 @@ def display_saude_expander(
 
             if modo_anual == label_var:
                 titulo_centralizado(f"{indicador_selecionado} - {label_var} Anual", 5)
+                adicionar_legenda_indicador(indicador_selecionado)
                 df_var_plot = df_anual_var.copy()
 
                 # Remove anos com variação nula
@@ -1379,6 +1419,7 @@ def display_saude_expander(
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 titulo_centralizado(f"{indicador_selecionado} - Análise Anual", 5)
+                adicionar_legenda_indicador(indicador_selecionado)
                 fig = criar_grafico_barras(
                     df=df_anual,
                     titulo="",
@@ -1454,6 +1495,7 @@ def display_saude_anual_expander(
 
         if aba_selecionada == label_var:
             titulo_centralizado(f"{indicador_selecionado} - {label_var}", 5)
+            adicionar_legenda_indicador(indicador_selecionado)
             df_var_plot = df_anual_var.copy()
 
             # Remove anos com variação nula
@@ -1475,6 +1517,7 @@ def display_saude_anual_expander(
             st.plotly_chart(fig, use_container_width=True)
         else:
             titulo_centralizado(f"{indicador_selecionado}", 5)
+            adicionar_legenda_indicador(indicador_selecionado)
             fig = criar_grafico_barras(
                 df=df_anual,
                 titulo="",
