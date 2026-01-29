@@ -839,7 +839,7 @@ def display_assistencia_kpi_cards(df_cad, df_bolsa, municipio_interesse):
             border=True,
         )
         col2.metric(
-            label=f"Beneficiários do Novo Bolsa Família em {MESES_DIC[ult_mes_bolsa][:3]}/{str(ult_ano_cad)[-2:]}",
+            label=f"Beneficiários do Novo Bolsa Família em {MESES_DIC[ult_mes_bolsa][:3]}/{str(ult_ano_bolsa)[-2:]}",
             value=f"{num_bolsa:,.0f}".replace(",", "."),
             delta=f"{num_bolsa_yoy}%".replace(".", ","),
             help="Taxa de Variação percentual em relação ao mesmo mês do ano anterior",
