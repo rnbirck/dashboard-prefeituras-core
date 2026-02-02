@@ -391,6 +391,11 @@ def display_siconfi_consolidado(df, expander_state_key, callback_func):
 
             titulo_centralizado(titulo_grafico, 5)
 
+            # Aviso sobre valores zerados
+            st.info(
+                "ℹ️ **Observação:** Caso algum indicador apresente valor 0 (zero), significa que o município não informou os valores para aquele bimestre."
+            )
+
             if not df_plot.empty:
                 fig = criar_grafico_barras(
                     df=df_plot,
