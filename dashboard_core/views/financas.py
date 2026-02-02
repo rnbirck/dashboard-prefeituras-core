@@ -736,7 +736,7 @@ def display_indicadores_financeiros(
 
         # Aviso sobre valores zerados
         st.info(
-            "ℹ️ **Observação:** Caso algum indicador apresente valor 0 (zero), significa que o município não informou os valores para aquele bimestre."
+            "ℹ️ **Observação:** Caso algum indicador apresente valor 0 (zero), significa que o município não informou os valores para aquele ano."
         )
 
         fig = criar_grafico_barras(
