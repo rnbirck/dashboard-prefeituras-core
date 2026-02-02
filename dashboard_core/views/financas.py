@@ -734,6 +734,11 @@ def display_indicadores_financeiros(
         titulo_centralizado(f" Indicador de {indicador_selecionado} (%)", 5)
         titulo_centralizado(f"{subtitulo}", 6)
 
+        # Aviso sobre valores zerados
+        st.info(
+            "ℹ️ **Observação:** Caso algum indicador apresente valor 0 (zero), significa que o município não informou os valores para aquele bimestre."
+        )
+
         fig = criar_grafico_barras(
             df=df_graf,
             titulo="",
