@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit as st
 from dashboard_core.utils import to_excel, titulo_centralizado
 
 
@@ -17,6 +16,10 @@ def show_page_dados(
     df_estoque_cnae_setor,
     df_estoque_cnae_grupo,
     df_estoque_cnae_subclasse,
+    df_estoque_faixa_etaria,
+    df_estoque_raca_cor,
+    df_estoque_grau_instrucao,
+    df_estoque_sexo,
     df_renda_mun,
     df_renda_ranking,
     df_renda_sexo,
@@ -335,6 +338,20 @@ def show_page_dados(
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
+            st.download_button(
+                label=f"📥 Estoque por Sexo em {municipio_de_interesse}",
+                data=to_excel(df_estoque_sexo),
+                file_name="estoque_emprego_sexo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            st.download_button(
+                label=f"📥 Estoque por Faixa Etária em {municipio_de_interesse}",
+                data=to_excel(df_estoque_faixa_etaria),
+                file_name="estoque_emprego_faixa_etaria.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
         with col_est_2:
             st.download_button(
                 label=f"📥 Estoque por CNAE Grupo em {municipio_de_interesse}",
@@ -347,6 +364,20 @@ def show_page_dados(
                 label=f"📥 Estoque por CNAE Subclasse em {municipio_de_interesse}",
                 data=to_excel(df_estoque_cnae_subclasse),
                 file_name="estoque_emprego_cnae_subclasse.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            st.download_button(
+                label=f"📥 Estoque por Raça/Cor em {municipio_de_interesse}",
+                data=to_excel(df_estoque_raca_cor),
+                file_name="estoque_emprego_raca_cor.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            st.download_button(
+                label=f"📥 Estoque por Grau de Instrução em {municipio_de_interesse}",
+                data=to_excel(df_estoque_grau_instrucao),
+                file_name="estoque_emprego_grau_instrucao.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
@@ -374,13 +405,6 @@ def show_page_dados(
                 use_container_width=True,
             )
             st.download_button(
-                label=f"📥 Renda por Raça/Cor em {municipio_de_interesse}",
-                data=to_excel(df_renda_raca_cor),
-                file_name="rais_renda_raca_cor.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-            st.download_button(
                 label="📥 Participação na Massa Salarial do RS e Posição no Ranking",
                 data=to_excel(df_renda_ranking),
                 file_name="rais_ranking_massa_salarial_rs.xlsx",
@@ -399,6 +423,13 @@ def show_page_dados(
                 label=f"📥 Renda por Faixa Salarial em {municipio_de_interesse}",
                 data=to_excel(df_renda_faixa_salarial),
                 file_name="rais_renda_faixa_salarial.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            st.download_button(
+                label=f"📥 Renda por Raça/Cor em {municipio_de_interesse}",
+                data=to_excel(df_renda_raca_cor),
+                file_name="rais_renda_raca_cor.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
