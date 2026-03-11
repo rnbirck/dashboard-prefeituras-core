@@ -1466,6 +1466,7 @@ def display_renda_ranking(df_renda_ranking):
 def display_renda(
     df_renda_mun,
     df_renda_sexo,
+    df_renda_raca_cor,
     df_renda_faixa_salarial,
     df_renda_cnae,
     municipio_interesse,
@@ -1476,6 +1477,7 @@ def display_renda(
             [
                 "Municípios",
                 "Sexo",
+                "Raça/Cor",
                 "Faixa Salarial",
                 "Setor",
                 "CNAE - Grupo",
@@ -1562,7 +1564,42 @@ def display_renda(
                     color_map={"Masculino": "#4C82F7", "Feminino": "#FF6BE1"},
                 )
 
-        # Aba 2: Análise por Faixa Salarial no município de interesse
+        # Aba 2: Análise por Raça/Cor no município de interesse
+        elif aba_selecionada == "Raça/Cor":
+            tipo_renda_raca_cor = (
+                st.segmented_control(
+                    "Selecione a métrica de remuneração:",
+                    options=[
+                        "Remuneração Nominal (R$)",
+                        "Remuneração (Salários Mínimos)",
+                    ],
+                    selection_mode="single",
+                    default="Remuneração Nominal (R$)",
+                    key="radio_renda_raca_cor",
+                )
+                or "Remuneração Nominal (R$)"
+            )
+
+            if tipo_renda_raca_cor == "Remuneração Nominal (R$)":
+                render_renda_grafico_tab(
+                    df=df_renda_raca_cor,
+                    coluna_agregacao="raca_cor",
+                    coluna_valor="remuneracao_media_dezembro",
+                    titulo_grafico=f"Remuneração Média Nominal (R$) por Raça/Cor em {municipio_interesse}",
+                    data_format=",.0f",
+                    hover_format=",.2f",
+                )
+            else:
+                render_renda_grafico_tab(
+                    df=df_renda_raca_cor,
+                    coluna_agregacao="raca_cor",
+                    coluna_valor="valor_remuneracao_media_dezembro_sm",
+                    titulo_grafico=f"Remuneração Média (Salários Mínimos) por Raça/Cor em {municipio_interesse}",
+                    data_format=",.2f",
+                    hover_format=",.2f",
+                )
+
+        # Aba 3: Análise por Faixa Salarial no município de interesse
         elif aba_selecionada == "Faixa Salarial":
             render_renda_grafico_tab(
                 df=df_renda_faixa_salarial,
@@ -1574,7 +1611,7 @@ def display_renda(
                 sort_order=ordem_faixa_salarial,
             )
 
-        # Aba 3: Análise por Setor no município de interesse
+        # Aba 4: Análise por Setor no município de interesse
         elif aba_selecionada == "Setor":
             tipo_renda_setor = (
                 st.segmented_control(
@@ -1609,7 +1646,7 @@ def display_renda(
                     hover_format=",.2f",
                 )
 
-        # Aba 4: Tabela por CNAE - Grupo
+        # Aba 5: Tabela por CNAE - Grupo
         elif aba_selecionada == "CNAE - Grupo":
             render_renda_tabela_tab(
                 df=df_renda_cnae,
@@ -1618,7 +1655,7 @@ def display_renda(
                 municipio_interesse=municipio_interesse,
             )
 
-        # Aba 5: Tabela por CNAE - Subclasse
+        # Aba 6: Tabela por CNAE - Subclasse
         elif aba_selecionada == "CNAE - Subclasse":
             render_renda_tabela_tab(
                 df=df_renda_cnae,
@@ -1647,6 +1684,7 @@ def show_page_emprego(
     df_renda_mun,
     df_renda_ranking,
     df_renda_sexo,
+    df_renda_raca_cor,
     df_renda_cnae,
     df_renda_faixa_salarial,
 ):
@@ -1710,6 +1748,7 @@ def show_page_emprego(
         df_renda_mun=df_renda_mun,
         df_renda_cnae=df_renda_cnae,
         df_renda_sexo=df_renda_sexo,
+        df_renda_raca_cor=df_renda_raca_cor,
         df_renda_faixa_salarial=df_renda_faixa_salarial,
         municipio_interesse=municipio_de_interesse,
     )

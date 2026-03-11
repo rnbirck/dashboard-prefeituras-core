@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit as st
 from dashboard_core.utils import to_excel, titulo_centralizado
 
 
@@ -19,6 +20,7 @@ def show_page_dados(
     df_renda_mun,
     df_renda_ranking,
     df_renda_sexo,
+    df_renda_raca_cor,
     df_renda_cnae,
     df_renda_faixa_salarial,
     municipio_de_interesse,
@@ -368,6 +370,13 @@ def show_page_dados(
                 label=f"📥 Renda por Sexo em {municipio_de_interesse}",
                 data=to_excel(df_renda_sexo),
                 file_name="rais_renda_sexo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            st.download_button(
+                label=f"📥 Renda por Raça/Cor em {municipio_de_interesse}",
+                data=to_excel(df_renda_raca_cor),
+                file_name="rais_renda_raca_cor.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )

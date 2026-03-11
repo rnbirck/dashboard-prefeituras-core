@@ -554,6 +554,21 @@ def carregar_dados_renda_sexo(municipio, anos):
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def carregar_dados_renda_raca_cor(municipio, anos):
+    if not supabase_client:
+        st.error("Conexão com Supabase não estabelecida.")
+        return pd.DataFrame()
+    response = (
+        supabase_client.table("dados_renda_raca_cor")
+        .select("*")
+        .eq("municipio", municipio)
+        .in_("ano", list(anos))
+        .execute()
+    )
+    return pd.DataFrame(response.data)
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def carregar_dados_renda_municipios(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
