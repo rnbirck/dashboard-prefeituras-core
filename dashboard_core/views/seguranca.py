@@ -265,6 +265,12 @@ def display_secao_seguranca(
             df_seguranca, coluna_selecionada, anos_visuais, is_taxa=False
         )
 
+        indicadores_taxa_frota = {"furto_veiculo", "roubo_veiculo"}
+        usa_taxa_frota = coluna_selecionada in indicadores_taxa_frota
+        label_taxa_exibicao = (
+            "Taxa por 10 mil veículos" if usa_taxa_frota else label_taxa_desc
+        )
+
         # Dados Taxa
         (hist_taxa, acum_taxa, _, anual_taxa, _, _, _) = (
             preparar_dados_graficos_seguranca(
@@ -321,7 +327,7 @@ def display_secao_seguranca(
 
                 modo_hist = st.segmented_control(
                     "Visualizar:",
-                    options=["Nº Ocorrências", label_taxa_desc],
+                    options=["Nº Ocorrências", label_taxa_exibicao],
                     key=key_hist,
                     selection_mode="single",
                     on_change=callback_func,
@@ -351,11 +357,11 @@ def display_secao_seguranca(
                 )
             else:
                 df_plot = hist_taxa
-                lbl_y = label_taxa_desc
+                lbl_y = label_taxa_exibicao
                 fmt = ",.1f"
                 hover = ",.2f"
                 titulo_grafico = (
-                    f"{label_taxa_desc} - {indicador_selecionado} - {ano_hist}"
+                    f"{label_taxa_exibicao} - {indicador_selecionado} - {ano_hist}"
                 )
 
             titulo_centralizado(titulo_grafico, 5)
@@ -392,7 +398,7 @@ def display_secao_seguranca(
 
             modo_acum = st.segmented_control(
                 "Visualizar:",
-                options=["Nº Ocorrências", label_taxa_desc, "Variação (%)"],
+                options=["Nº Ocorrências", label_taxa_exibicao, "Variação (%)"],
                 key=key_acum,
                 selection_mode="single",
                 on_change=callback_func,
@@ -431,12 +437,10 @@ def display_secao_seguranca(
                     titulo_grafico = f"Número de Ocorrências - {indicador_selecionado} - {periodo_txt}"
                 else:
                     df_plot = acum_taxa.copy()
-                    lbl_y = label_taxa_desc
+                    lbl_y = label_taxa_exibicao
                     fmt = ",.1f"
                     hover = ",.2f"
-                    titulo_grafico = (
-                        f"{label_taxa_desc} - {indicador_selecionado} - {periodo_txt}"
-                    )
+                    titulo_grafico = f"{label_taxa_exibicao} - {indicador_selecionado} - {periodo_txt}"
 
                 titulo_centralizado(titulo_grafico, 5)
 
@@ -467,7 +471,7 @@ def display_secao_seguranca(
 
             modo_anual = st.segmented_control(
                 "Visualizar:",
-                options=["Nº Ocorrências", label_taxa_desc, "Variação (%)"],
+                options=["Nº Ocorrências", label_taxa_exibicao, "Variação (%)"],
                 key=key_anual,
                 selection_mode="single",
                 on_change=callback_func,
@@ -503,11 +507,11 @@ def display_secao_seguranca(
                     )
                 else:
                     df_plot = anual_taxa
-                    lbl_y = label_taxa_desc
+                    lbl_y = label_taxa_exibicao
                     fmt = ",.1f"
                     hover = ",.2f"
                     titulo_grafico = (
-                        f"{label_taxa_desc} - {indicador_selecionado} - Anual"
+                        f"{label_taxa_exibicao} - {indicador_selecionado} - Anual"
                     )
 
                 titulo_centralizado(titulo_grafico, 5)

@@ -528,7 +528,7 @@ WITH pop_feminina AS (
         municipio,
         pop_estimada AS pop_feminina
     FROM populacao_sexo
-    WHERE sexo = 'Feminino'
+    WHERE sexo = 'Feminino' AND sigla_uf = 'RS'
 )
 SELECT
     t1.ano,
@@ -549,7 +549,7 @@ SELECT
     ROUND(((t1.estupro * 10000.0) / NULLIF(t3.pop_feminina, 0))::NUMERIC, 3) AS taxa_estupro,
     ROUND(((t1.lesao_corporal * 10000.0) / NULLIF(t3.pop_feminina, 0))::NUMERIC, 3) AS taxa_lesao_corporal
 FROM seguranca t1
-JOIN populacao t2 ON t1.ano = t2.ano AND t1.municipio = t2.municipio
+JOIN populacao t2 ON t1.ano = t2.ano AND t1.municipio = t2.municipio AND t2.sigla_uf = 'RS'
 JOIN pop_feminina t3 ON t1.ano = t3.ano AND t1.municipio = t3.municipio
 WHERE t1.municipio IN :lista_municipios AND t1.ano IN :lista_anos
 """
@@ -886,7 +886,7 @@ SELECT t1.ano,
        t1.qtd_leitos_sus * 1. / (t3.pop_estimada / 1000) AS qtd_leitos_sus_mil_hab
 FROM saude_leitos t1
 JOIN municipio t2 on t1.id_municipio = t2.id_municipio
-JOIN populacao t3 on t1.id_municipio = t3.id_municipio AND t1.ano = t3.ano
+JOIN populacao t3 on t1.id_municipio = t3.id_municipio AND t1.ano = t3.ano AND t3.sigla_uf = 'RS'
 WHERE t2.municipio IN :lista_municipios AND t1.ano IN :lista_anos
 """
 
@@ -897,7 +897,7 @@ SELECT t1.ano,
        t1.qtd_medicos_sus * 1. / (t3.pop_estimada / 1000) AS qtd_medicos_sus_mil_hab
 FROM saude_medicos t1
 JOIN municipio t2 on t1.id_municipio = t2.id_municipio
-JOIN populacao t3 on t1.id_municipio = t3.id_municipio AND t1.ano = t3.ano
+JOIN populacao t3 on t1.id_municipio = t3.id_municipio AND t1.ano = t3.ano AND t3.sigla_uf = 'RS'
 WHERE t2.municipio IN :lista_municipios AND t1.ano IN :lista_anos
 """
 
@@ -990,7 +990,7 @@ SELECT
        area,
        densidade_demografica
 FROM populacao
-WHERE municipio IN :lista_municipios AND ano IN :lista_anos
+WHERE municipio IN :lista_municipios AND ano IN :lista_anos AND sigla_uf = 'RS'
 """
 
 QUERY_POP_SEXO_IDADE = """
