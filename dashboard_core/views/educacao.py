@@ -131,6 +131,55 @@ def preparar_dados_grafico_educacao(
 
 
 @st.cache_data
+def preparar_dados_taxa_creche_primeira_linha(
+    df_filtrado,
+    coluna_selecionada,
+    municipios_selecionados,
+    anos_visualizacao=None,
+):
+    """
+    Prepara dados da Taxa - Creche usando o primeiro registro de cada
+    combinação ano/município.
+    """
+    if df_filtrado.empty or coluna_selecionada not in df_filtrado.columns:
+        return pd.DataFrame(), pd.DataFrame()
+
+    df_base = df_filtrado[df_filtrado["municipio"].isin(municipios_selecionados)].copy()
+
+    if df_base.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    df_primeira_linha = df_base.groupby(
+        ["ano", "municipio"], as_index=False, sort=False
+    ).first()[["ano", "municipio", coluna_selecionada]]
+
+    anos = sorted(df_base["ano"].unique())
+
+    df_grid = pd.MultiIndex.from_product(
+        [anos, municipios_selecionados], names=["ano", "municipio"]
+    ).to_frame(index=False)
+
+    df_completo = pd.merge(
+        df_grid, df_primeira_linha, on=["ano", "municipio"], how="left"
+    ).fillna(0)
+
+    df_graf = df_completo.pivot_table(
+        index="ano",
+        columns="municipio",
+        values=coluna_selecionada,
+        aggfunc="sum",
+        fill_value=0,
+    ).sort_index()
+
+    df_graf_var = df_graf.pct_change() * 100
+
+    if anos_visualizacao:
+        df_graf = df_graf[df_graf.index.isin(anos_visualizacao)]
+
+    return df_graf, df_graf_var
+
+
+@st.cache_data
 def preparar_dados_grafico_ideb_municipio(
     df,
     indicador,
@@ -275,25 +324,39 @@ def display_educacao(
                 key=f"{key_prefix}_selectbox_indicadores",
                 on_change=callback_func,
             )
-        with col2:
-            dependecia_selecionada = st.selectbox(
-                "Selecione uma dependência:",
-                options=list(dicionario_dependencia.keys()),
-                key=f"{key_prefix}_selectbox_dependencia",
-                on_change=callback_func,
-            )
 
         coluna_selecionada = dicionario_indicadores[indicador_selecionado]
 
-        dependencia_selecionada = dicionario_dependencia[dependecia_selecionada]
-
-        df_graf, df_graf_var = preparar_dados_grafico_educacao(
-            df_filtrado=df_filtrado,
-            coluna_selecionada=coluna_selecionada,
-            dependencia=dependencia_selecionada,
-            municipios_selecionados=municipios_selecionados,
-            anos_visualizacao=anos_de_interesse,
+        is_taxa_creche = (
+            key_prefix == "matriculas" and coluna_selecionada == "taxa_matricula_creche"
         )
+
+        if not is_taxa_creche:
+            with col2:
+                dependecia_selecionada = st.selectbox(
+                    "Selecione uma dependência:",
+                    options=list(dicionario_dependencia.keys()),
+                    key=f"{key_prefix}_selectbox_dependencia",
+                    on_change=callback_func,
+                )
+
+            dependencia_selecionada = dicionario_dependencia[dependecia_selecionada]
+
+            df_graf, df_graf_var = preparar_dados_grafico_educacao(
+                df_filtrado=df_filtrado,
+                coluna_selecionada=coluna_selecionada,
+                dependencia=dependencia_selecionada,
+                municipios_selecionados=municipios_selecionados,
+                anos_visualizacao=anos_de_interesse,
+            )
+        else:
+            # Para Taxa - Creche, não há filtro de dependência; usa a primeira linha por ano/município.
+            df_graf, df_graf_var = preparar_dados_taxa_creche_primeira_linha(
+                df_filtrado=df_filtrado,
+                coluna_selecionada=coluna_selecionada,
+                municipios_selecionados=municipios_selecionados,
+                anos_visualizacao=anos_de_interesse,
+            )
 
         # --- NAVEGAÇÃO ENTRE "ABAS" (CONTROLADA POR ESTADO) ---
         key_main_tab = f"main_tab_nav_{key_prefix}"
@@ -313,14 +376,21 @@ def display_educacao(
         if aba_selecionada == "Variação (%)":
             # Remove anos com variação nula (NaN) em todas as colunas
             df_plot = df_graf_var.dropna(how="all")
-            titulo_grafico = f"{titulo_expander} - {indicador_selecionado} - {dependecia_selecionada} - Variação (%)"
+            if is_taxa_creche:
+                titulo_grafico = "Taxa de Matrículas em Creches - Variação (%)"
+            else:
+                titulo_grafico = f"{titulo_expander} - {indicador_selecionado} - {dependecia_selecionada} - Variação (%)"
             lbl_y = "Variação (%)"
             fmt = "+,.1f"
             hover_fmt = "+,.2f"
         else:
             df_plot = df_graf
-            titulo_grafico = f"{titulo_expander} - {indicador_selecionado} - {dependecia_selecionada}"
-            lbl_y = label_y
+            if is_taxa_creche:
+                titulo_grafico = "Taxa de Matrículas em Creches"
+                lbl_y = "Taxa de Matrículas"
+            else:
+                titulo_grafico = f"{titulo_expander} - {indicador_selecionado} - {dependecia_selecionada}"
+                lbl_y = label_y
             fmt = data_label_format
             hover_fmt = hover_label_format
 
