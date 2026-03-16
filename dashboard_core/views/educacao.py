@@ -475,22 +475,29 @@ def display_taxa_rendimento(
             anos_visualizacao=anos_de_interesse,
         )
 
+        # Remove anos em que o indicador é zero para todos os municípios.
+        if not df_graf.empty:
+            df_graf = df_graf[(df_graf != 0).any(axis=1)]
+
         titulo_centralizado(
             f"{indicador_selecionado_label} - {nivel_selecionado_label} - {dependencia_selecionada_label}",
             5,
         )
 
-        fig = criar_grafico_barras(
-            df=df_graf,
-            titulo="",
-            label_y=f"{label_y}",
-            barmode="group",
-            height=400,
-            data_label_format=f"{data_label_format}",
-            hover_label_format=f"{hover_label_format}",
-            color_map=CORES_MUNICIPIOS,
-        )
-        st.plotly_chart(fig, width="stretch")
+        if not df_graf.empty:
+            fig = criar_grafico_barras(
+                df=df_graf,
+                titulo="",
+                label_y=f"{label_y}",
+                barmode="group",
+                height=400,
+                data_label_format=f"{data_label_format}",
+                hover_label_format=f"{hover_label_format}",
+                color_map=CORES_MUNICIPIOS,
+            )
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.warning("Sem dados disponíveis para exibição no período selecionado.")
 
 
 def display_ideb_mun(
