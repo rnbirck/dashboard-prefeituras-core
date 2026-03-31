@@ -841,31 +841,32 @@ WHERE t2.municipio IN :lista_municipios
 """
 
 QUERY_SAUDE_MENSAL = """
-SELECT ano,
-       mes,
-       municipio,
-       internacoes_icsab,
-       internacoes_totais,
-       prop_icsab * 100 AS prop_icsab,
-       nascimentos,
-       prop_nasc_adolesc,
-       obitos,
-       taxa_obitos_infantis,
-       coef_neonatal,
-       nasc_baixo_peso,
-       prop_nasc_baixo_peso,
-       consultas_pre_natal,
-       prop_consultas_pre_natal,
-       obitos_causa_definida,
-       obitos_totais,
-       prop_obitos_causas_definidas * 100 AS prop_obitos_causas_definidas,
-       obitos_causa_nao_definida,
-       notificacoes_acidentes_trab,
-       populacao,
-       "nascimentos/1000_hab",
-       taxa_acidentes_trab
-FROM saude
-WHERE municipio IN :lista_municipios AND ano IN :lista_anos
+SELECT t1.ano,
+       t1.mes,
+       t1.municipio,
+       t1.internacoes_icsab,
+       t1.internacoes_totais,
+       t1.prop_icsab * 100 AS prop_icsab,
+       t1.nascimentos,
+       t1.prop_nasc_adolesc,
+       t1.obitos,
+       t1.taxa_obitos_infantis,
+       t1.coef_neonatal,
+       t1.nasc_baixo_peso,
+       t1.prop_nasc_baixo_peso,
+       t1.consultas_pre_natal,
+       t1.prop_consultas_pre_natal,
+       t1.obitos_causa_definida,
+       t1.obitos_totais,
+       t1.prop_obitos_causas_definidas * 100 AS prop_obitos_causas_definidas,
+       t1.obitos_causa_nao_definida,
+       t1.notificacoes_acidentes_trab,
+       t2.pop_estimada AS populacao,
+       t1."nascimentos/1000_hab",
+       t1.taxa_acidentes_trab
+FROM saude t1
+JOIN populacao t2 on t1.ano = t2.ano AND t1.municipio = t2.municipio AND t2.sigla_uf = 'RS'
+WHERE t1.municipio IN :lista_municipios AND t1.ano IN :lista_anos
 """
 
 QUERY_SAUDE_DESPESAS = """
