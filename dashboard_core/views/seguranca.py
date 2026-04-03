@@ -157,7 +157,12 @@ def preparar_dados_graficos_seguranca(
 
 
 @st.cache_data
-def preparar_dados_furtos_por_tipo(df_furtos, anos_visualizacao):
+def preparar_dados_furtos_por_tipo(
+    df_furtos,
+    anos_visualizacao,
+    ult_ano_referencia=None,
+    ult_mes_referencia=None,
+):
     """
     Prepara os DataFrames para análise de furtos por tipo.
     Retorna dados para Acumulado no Ano e Anual com valores absolutos e variação.
@@ -171,11 +176,29 @@ def preparar_dados_furtos_por_tipo(df_furtos, anos_visualizacao):
     if df_furtos.empty:
         return df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
 
-    # Determina o mês de referência com base no último ano real da série,
-    # independentemente dos anos escolhidos para visualização.
-    ult_ano = df_furtos["ano"].max()
-    df_ult_ano = df_furtos[df_furtos["ano"] == ult_ano]
-    ult_mes = int(df_ult_ano["mes"].max()) if not df_ult_ano.empty else None
+    # Usa referência externa quando disponível (série mensal geral de furtos).
+    if ult_ano_referencia is not None and ult_mes_referencia is not None:
+        ult_ano = int(ult_ano_referencia)
+        ult_mes = int(ult_mes_referencia)
+    else:
+        # Fallback: determina o mês no último ano com base em dado efetivo.
+        # Em algumas bases, meses futuros podem existir com valor zero.
+        ult_ano = df_furtos["ano"].max()
+        df_ult_ano = df_furtos[df_furtos["ano"] == ult_ano].copy()
+
+        if not df_ult_ano.empty:
+            df_ult_ano["mes"] = pd.to_numeric(df_ult_ano["mes"], errors="coerce")
+            df_ult_ano["n_furtos"] = pd.to_numeric(
+                df_ult_ano["n_furtos"], errors="coerce"
+            )
+
+            soma_por_mes = df_ult_ano.groupby("mes", dropna=True)["n_furtos"].sum()
+            meses_com_dado = soma_por_mes[soma_por_mes > 0].index.tolist()
+
+            if meses_com_dado:
+                ult_mes = int(max(meses_com_dado))
+            else:
+                ult_mes = int(df_ult_ano["mes"].max())
 
     # 1. Acumulado no Ano (até o último mês disponível)
     df_acum_temp = df_furtos[df_furtos["mes"] <= ult_mes]
@@ -526,7 +549,13 @@ def display_secao_seguranca(
                 st.plotly_chart(fig, use_container_width=True)
 
 
-def display_furtos_por_tipo(df_furtos, expander_state_key, callback_func):
+def display_furtos_por_tipo(
+    df_furtos,
+    expander_state_key,
+    callback_func,
+    ult_ano_referencia=None,
+    ult_mes_referencia=None,
+):
     """
     Exibe análise de furtos por tipo em formato de tabela.
     Mostra o tipo de furto nas linhas e anos nas colunas com valores absolutos ou variação.
@@ -547,7 +576,12 @@ def display_furtos_por_tipo(df_furtos, expander_state_key, callback_func):
             df_anual_var,
             ult_ano,
             ult_mes,
-        ) = preparar_dados_furtos_por_tipo(df_furtos, anos_de_interesse)
+        ) = preparar_dados_furtos_por_tipo(
+            df_furtos,
+            anos_de_interesse,
+            ult_ano_referencia=ult_ano_referencia,
+            ult_mes_referencia=ult_mes_referencia,
+        )
 
         # Navegação entre abas
         key_main_tab = "main_tab_nav_furtos"
@@ -796,8 +830,30 @@ def show_page_seguranca(df_seguranca, df_seguranca_taxa, df_seguranca_furtos):
         "drogas_expander_state",
         drogas_callback,
     )
+    ult_ano_ref_furtos, ult_mes_ref_furtos = None, None
+    if (
+        df_seguranca is not None
+        and not df_seguranca.empty
+        and {"ano", "mes", "furtos"}.issubset(df_seguranca.columns)
+    ):
+        df_ref = df_seguranca[["ano", "mes", "furtos"]].copy()
+        df_ref["ano"] = pd.to_numeric(df_ref["ano"], errors="coerce")
+        df_ref["mes"] = pd.to_numeric(df_ref["mes"], errors="coerce")
+        df_ref["furtos"] = pd.to_numeric(df_ref["furtos"], errors="coerce")
+
+        # Evita que meses placeholder com zero puxem o período para dezembro.
+        df_ref = df_ref[df_ref["furtos"] > 0]
+
+        if not df_ref.empty:
+            ult_ano_ref_furtos = int(df_ref["ano"].max())
+            ult_mes_ref_furtos = int(
+                df_ref[df_ref["ano"] == ult_ano_ref_furtos]["mes"].max()
+            )
+
     display_furtos_por_tipo(
         df_seguranca_furtos,
         "furtos_expander_state",
         furtos_callback,
+        ult_ano_referencia=ult_ano_ref_furtos,
+        ult_mes_referencia=ult_mes_ref_furtos,
     )
