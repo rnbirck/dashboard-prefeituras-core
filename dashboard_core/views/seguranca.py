@@ -171,14 +171,11 @@ def preparar_dados_furtos_por_tipo(df_furtos, anos_visualizacao):
     if df_furtos.empty:
         return df_acum, df_acum_var, df_anual, df_anual_var, ult_ano, ult_mes
 
-    # Determinar último ano e mês
-    df_range = df_furtos[df_furtos["ano"].isin(anos_visualizacao)]
-    if df_range.empty:
-        ult_ano = df_furtos["ano"].max()
-    else:
-        ult_ano = df_range["ano"].max()
-
-    ult_mes = df_furtos[df_furtos["ano"] == ult_ano]["mes"].max()
+    # Determina o mês de referência com base no último ano real da série,
+    # independentemente dos anos escolhidos para visualização.
+    ult_ano = df_furtos["ano"].max()
+    df_ult_ano = df_furtos[df_furtos["ano"] == ult_ano]
+    ult_mes = int(df_ult_ano["mes"].max()) if not df_ult_ano.empty else None
 
     # 1. Acumulado no Ano (até o último mês disponível)
     df_acum_temp = df_furtos[df_furtos["mes"] <= ult_mes]

@@ -2,7 +2,6 @@ MANIFEST.in
 setup.py
 dashboard_core/__init__.py
 dashboard_core/data_loader.py
-dashboard_core/data_loader_antigo.py
 dashboard_core/queries.py
 dashboard_core/utils.py
 dashboard_core.egg-info/PKG-INFO
@@ -12,6 +11,7 @@ dashboard_core.egg-info/requires.txt
 dashboard_core.egg-info/top_level.txt
 dashboard_core/assets/style.css
 dashboard_core/views/__init__.py
+dashboard_core/views/adm_publica.py
 dashboard_core/views/assistencia_social.py
 dashboard_core/views/comercio_exterior.py
 dashboard_core/views/dados.py

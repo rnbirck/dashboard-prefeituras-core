@@ -12,6 +12,7 @@ Requires-Dist: numpy==2.3.2
 Requires-Dist: plotly==6.3.0
 Requires-Dist: openpyxl==3.1.5
 Requires-Dist: pyarrow==21.0.0
+Requires-Dist: matplotlib
 Dynamic: author
 Dynamic: author-email
 Dynamic: requires-dist
