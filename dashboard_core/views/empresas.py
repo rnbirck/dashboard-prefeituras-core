@@ -134,6 +134,34 @@ def preparar_dados_grafico_empresas_ativas(df, df_setor, df_cnae, df_cnae_saldo)
             .sort_index()
         )
 
+    def adicionar_coluna_data(dataframe):
+        if dataframe.empty:
+            return dataframe.copy()
+
+        return dataframe.assign(
+            date=lambda x: pd.to_datetime(
+                x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
+            )
+        )
+
+    def calcular_saldo_yoy_cnae(dataframe):
+        if dataframe.empty:
+            return dataframe.copy()
+
+        df_proc = dataframe.copy().sort_values(
+            by=["municipio", "grupo", "grupo_ibge", "mes", "ano"]
+        )
+        df_proc["empresas_ativas_ano_anterior"] = df_proc.groupby(
+            ["municipio", "grupo", "grupo_ibge", "mes"], dropna=False
+        )["empresas_ativas"].shift(1)
+        df_proc["saldo_empresas_yoy"] = (
+            df_proc["empresas_ativas"] - df_proc["empresas_ativas_ano_anterior"]
+        )
+        df_proc.loc[
+            df_proc["empresas_ativas_ano_anterior"].isna(), "saldo_empresas_yoy"
+        ] = pd.NA
+        return df_proc
+
     # 1. Dados Totais por Município (Date x Municipio)
     df_graf_total = processar_df_base(df, "municipio", "empresas_ativas")
 
@@ -146,15 +174,9 @@ def preparar_dados_grafico_empresas_ativas(df, df_setor, df_cnae, df_cnae_saldo)
     df_graf_setor_yoy = processar_df_base(df_setor, "grupo_ibge", "empresas_ativas_yoy")
 
     # 3. Dados CNAE Estoque (Date x Grupo)
-    df_cnae_processed = df_cnae.assign(
-        date=lambda x: pd.to_datetime(
-            x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
-        )
-    )
-    df_cnae_saldo_processed = df_cnae_saldo.assign(
-        date=lambda x: pd.to_datetime(
-            x["ano"].astype(str) + "-" + x["mes"].astype(str).str.zfill(2) + "-01"
-        )
+    df_cnae_processed = adicionar_coluna_data(df_cnae)
+    df_cnae_saldo_yoy_processed = adicionar_coluna_data(
+        calcular_saldo_yoy_cnae(df_cnae)
     )
 
     # Últimos dados para defaults
@@ -167,7 +189,7 @@ def preparar_dados_grafico_empresas_ativas(df, df_setor, df_cnae, df_cnae_saldo)
         df_graf_setor,
         df_graf_setor_yoy,
         df_cnae_processed,
-        df_cnae_saldo_processed,
+        df_cnae_saldo_yoy_processed,
         ult_ano,
         ult_mes,
     )
@@ -197,7 +219,7 @@ def display_empresas_ativas_expander(
             df_graf_setor,
             df_graf_setor_yoy,
             df_cnae_processed,
-            df_cnae_saldo_processed,
+            df_cnae_saldo_yoy_processed,
             ult_ano,
             ult_mes,
         ) = preparar_dados_grafico_empresas_ativas(
@@ -497,21 +519,30 @@ def display_empresas_ativas_expander(
                 cmap = "GnBu"  # Azul para estoque
                 titulo_tabela = f"Estoque {titulo_sufixo} por CNAE"
             else:
-                df_base = df_cnae_saldo_processed[
-                    filter_condition(df_cnae_saldo_processed)
+                df_base = df_cnae_saldo_yoy_processed[
+                    filter_condition(df_cnae_saldo_yoy_processed)
                 ]
-                val_col = "saldo_empresas"
+                val_col = "saldo_empresas_yoy"
                 titulo_tabela = f"Saldo {titulo_sufixo} por CNAE"
 
             if not df_base.empty:
-                df_pivot_final = df_base.pivot_table(
-                    index="grupo",
-                    columns="date",
-                    values=val_col,
-                    aggfunc="sum",
-                    observed=False,
-                    fill_value=0,
-                )
+                if metric_mode_cnae == "Saldo":
+                    df_pivot_final = df_base.pivot_table(
+                        index="grupo",
+                        columns="date",
+                        values=val_col,
+                        aggfunc="first",
+                        observed=False,
+                    )
+                else:
+                    df_pivot_final = df_base.pivot_table(
+                        index="grupo",
+                        columns="date",
+                        values=val_col,
+                        aggfunc="sum",
+                        observed=False,
+                        fill_value=0,
+                    )
 
                 # Aplica a ordenação fixa
                 if len(ordenacao_fixa) > 0:
@@ -530,11 +561,9 @@ def display_empresas_ativas_expander(
 
                 # 3. ESTILIZAÇÃO
                 if metric_mode_cnae == "Saldo":
-                    # Formatação com % e separador decimal ,
+                    # Formatação inteira para saldo absoluto versus o mesmo mês do ano anterior
                     styler = df_pivot_final.style.format(
-                        lambda x: f"{x:+,.1f}%".replace(",", "X")
-                        .replace(".", ",")
-                        .replace("X", ".")
+                        lambda x: "-" if pd.isna(x) else f"{x:+,.0f}".replace(",", ".")
                     ).map(style_saldo_variacao)
                 else:
                     # Formatação padrão para Estoque
@@ -654,9 +683,9 @@ def render_estabelecimentos_tabela_tab(
     if metric_mode == "Variação (%)":
         # Formatação com % e separador decimal ,
         styler = df_pivot.style.format(
-            lambda x: f"{x:+,.1f}%".replace(",", "X")
-            .replace(".", ",")
-            .replace("X", ".")
+            lambda x: (
+                f"{x:+,.1f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
         ).map(style_saldo_variacao)
     else:
         styler = df_pivot.style.format(fmt).background_gradient(cmap="GnBu")
