@@ -119,6 +119,130 @@ def display_estoque_kpi_cards(df, municipio_interesse):
         )
 
 
+def formatar_saldo_card(valor):
+    valor_formatado = f"{abs(valor):,.0f}".replace(",", ".")
+    if valor > 0:
+        return f"+{valor_formatado}"
+    elif valor < 0:
+        return f"-{valor_formatado}"
+    return "0"
+
+
+def display_resumo_cards(df_caged, df_estoque, municipio_interesse):
+    """Exibe os cards de resumo no topo da página com indicadores principais."""
+
+    filtro_municipio_caged = df_caged["municipio"] == municipio_interesse
+    df_municipio_caged = df_caged[filtro_municipio_caged]
+
+    filtro_municipio_estoque = df_estoque["municipio"] == municipio_interesse
+    df_municipio_estoque = df_estoque[filtro_municipio_estoque]
+
+    ult_ano = int(df_municipio_caged["ano"].max())
+    ult_mes = int(df_municipio_caged[df_municipio_caged["ano"] == ult_ano]["mes"].max())
+
+    saldo_ult_mes = int(
+        df_municipio_caged[
+            (df_municipio_caged["ano"] == ult_ano) & (df_municipio_caged["mes"] == ult_mes)
+        ]["saldo_movimentacao"].sum()
+    )
+
+    saldo_acu_ano = int(
+        df_municipio_caged[
+            (df_municipio_caged["ano"] == ult_ano) & (df_municipio_caged["mes"] <= ult_mes)
+        ]["saldo_movimentacao"].sum()
+    )
+
+    estoque_ult_mes = int(
+        df_municipio_estoque[
+            (df_municipio_estoque["ano"] == ult_ano) & (df_municipio_estoque["mes"] == ult_mes)
+        ]["estoque_mensal"].sum()
+    )
+
+    estoque_variacao = calcular_yoy(
+        df=df_estoque,
+        municipio=municipio_interesse,
+        ultimo_ano=ult_ano,
+        ultimo_mes=ult_mes,
+        coluna="estoque_mensal",
+        round=1,
+    )
+
+    saldo_formatado = formatar_saldo_card(saldo_ult_mes)
+    acumulado_formatado = formatar_saldo_card(saldo_acu_ano)
+    estoque_formatado = f"{estoque_ult_mes:,.0f}".replace(",", ".")
+
+    if estoque_variacao is not None:
+        estoque_delta = f"{estoque_variacao}%".replace(".", ",")
+    else:
+        estoque_delta = None
+
+    def cor_saldo(valor):
+        if valor > 0:
+            return "#008A3D"
+        elif valor < 0:
+            return "#D92D20"
+        return "#31333F"
+
+    def render_card_saldo(label, valor_formatado, valor):
+        cor = cor_saldo(valor)
+        st.markdown(
+            f"""
+            <div style="
+                border: 1px solid rgba(49, 51, 63, 0.2);
+                border-radius: 0.5rem;
+                padding: 1.25rem;
+                text-align: center;
+                min-height: 118px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            ">
+                <div style="
+                    font-size: 1rem;
+                    margin-bottom: 0.35rem;
+                    color: #000;
+                ">
+                    {label}
+                </div>
+                <div style="
+                    font-size: 1.35rem;
+                    font-weight: 600;
+                    color: {cor};
+                ">
+                    {valor_formatado}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        render_card_saldo(
+            label=f"Saldo no Mês em {MESES_DIC[ult_mes]} de {ult_ano}",
+            valor_formatado=saldo_formatado,
+            valor=saldo_ult_mes,
+        )
+
+    with col2:
+        render_card_saldo(
+            label=f"Saldo Acumulado de Jan a {MESES_DIC[ult_mes][:3]} de {ult_ano}",
+            valor_formatado=acumulado_formatado,
+            valor=saldo_acu_ano,
+        )
+
+    with col3:
+        st.metric(
+            label=f"Estoque de Emprego Estimado em {MESES_DIC[ult_mes]} de {ult_ano}",
+            value=estoque_formatado,
+            delta=estoque_delta,
+            delta_color="normal",
+            help="Taxa de variação percentual em relação ao mesmo mês do ano anterior",
+            border=True,
+        )
+
+
 def expander_emprego_callback():
     """Garante que o expander de emprego permaneça aberto após a interação."""
     st.session_state.emprego_expander_state = True
@@ -1690,59 +1814,60 @@ def show_page_emprego(
 ):
     """Função principal que renderiza a página de Emprego."""
     st.markdown(
-        "<h1 style='text-align: center;'>Dashboard de Emprego e Renda </h1>",
+        "<h1 style='text-align: center;'>Dashboard de Emprego e Renda</h1>",
         unsafe_allow_html=True,
     )
+
     ult_ano = int(df_caged["ano"].max())
     ult_mes = int(df_caged[df_caged["ano"] == ult_ano]["mes"].max())
-    st.markdown("###### Dados disponibilizados pelo CAGED - Atualização Mensal")
-    with st.expander("Saldo de Admissões e Demissões", expanded=True):
-        display_emprego_kpi_cards(df_caged, municipio_de_interesse)
 
-        titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
+    display_resumo_cards(df_caged, df_estoque, municipio_de_interesse)
 
-        display_emprego_municipios_expander(
-            df_caged,
-            municipio_de_interesse,
-        )
+    st.markdown("---")
+    st.markdown("##### Saldo de Admissões e Demissões")
+    st.caption("Dados disponibilizados pelo CAGED - Atualização Mensal")
 
-        display_emprego_categoria_expander(
-            df_faixa_etaria=df_caged_faixa_etaria,
-            df_sexo=df_caged_sexo,
-            df_raca_cor=df_caged_raca_cor,
-            df_grau_instrucao=df_caged_grau_instrucao,
-            ult_mes=ult_mes,
-        )
-
-        if not df_caged_cnae.empty:
-            display_emprego_cnae_expander(df_caged_cnae)
-    st.markdown(
-        "###### Estimativa de Estoque de Emprego (Dados combinados da RAIS e CAGED) - Atualização Mensal"
+    display_emprego_municipios_expander(
+        df_caged,
+        municipio_de_interesse,
     )
-    with st.expander("Estoque de Emprego Estimado", expanded=True):
-        display_estoque_kpi_cards(df_estoque, municipio_de_interesse)
-        titulo_centralizado("Clique nos menus abaixo para explorar os dados", 5)
 
-        display_estoque_municipios_expander(
-            df_estoque,
-        )
-
-        display_estoque_categoria_expander(
-            df_sexo=df_estoque_sexo,
-            df_faixa_etaria=df_estoque_faixa_etaria,
-            df_raca_cor=df_estoque_raca_cor,
-            df_grau_instrucao=df_estoque_grau_instrucao,
-            ult_mes=ult_mes,
-        )
-
-        display_estoque_cnae_expander(
-            df_cnae_grupo=df_estoque_cnae_grupo,
-            df_cnae_setor=df_estoque_cnae_setor,
-            df_cnae_subclasse=df_estoque_cnae_subclasse,
-        )
-    st.markdown(
-        "###### Renda do Trabalho - Dados disponibilizados pela RAIS - Atualização Anual"
+    display_emprego_categoria_expander(
+        df_faixa_etaria=df_caged_faixa_etaria,
+        df_sexo=df_caged_sexo,
+        df_raca_cor=df_caged_raca_cor,
+        df_grau_instrucao=df_caged_grau_instrucao,
+        ult_mes=ult_mes,
     )
+
+    if not df_caged_cnae.empty:
+        display_emprego_cnae_expander(df_caged_cnae)
+
+    st.markdown("---")
+    st.markdown("##### Estoque de Emprego Estimado")
+    st.caption("Estimativa de Estoque de Emprego (Dados combinados da RAIS e CAGED) - Atualização Mensal")
+
+    display_estoque_municipios_expander(
+        df_estoque,
+    )
+
+    display_estoque_categoria_expander(
+        df_sexo=df_estoque_sexo,
+        df_faixa_etaria=df_estoque_faixa_etaria,
+        df_raca_cor=df_estoque_raca_cor,
+        df_grau_instrucao=df_estoque_grau_instrucao,
+        ult_mes=ult_mes,
+    )
+
+    display_estoque_cnae_expander(
+        df_cnae_grupo=df_estoque_cnae_grupo,
+        df_cnae_setor=df_estoque_cnae_setor,
+        df_cnae_subclasse=df_estoque_cnae_subclasse,
+    )
+
+    st.markdown("---")
+    st.markdown("##### Renda do Trabalho")
+    st.caption("Dados disponibilizados pela RAIS - Atualização Anual")
 
     display_renda(
         df_renda_mun=df_renda_mun,
