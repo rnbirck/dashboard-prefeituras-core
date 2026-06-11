@@ -142,19 +142,22 @@ def display_resumo_cards(df_caged, df_estoque, municipio_interesse):
 
     saldo_ult_mes = int(
         df_municipio_caged[
-            (df_municipio_caged["ano"] == ult_ano) & (df_municipio_caged["mes"] == ult_mes)
+            (df_municipio_caged["ano"] == ult_ano)
+            & (df_municipio_caged["mes"] == ult_mes)
         ]["saldo_movimentacao"].sum()
     )
 
     saldo_acu_ano = int(
         df_municipio_caged[
-            (df_municipio_caged["ano"] == ult_ano) & (df_municipio_caged["mes"] <= ult_mes)
+            (df_municipio_caged["ano"] == ult_ano)
+            & (df_municipio_caged["mes"] <= ult_mes)
         ]["saldo_movimentacao"].sum()
     )
 
     estoque_ult_mes = int(
         df_municipio_estoque[
-            (df_municipio_estoque["ano"] == ult_ano) & (df_municipio_estoque["mes"] == ult_mes)
+            (df_municipio_estoque["ano"] == ult_ano)
+            & (df_municipio_estoque["mes"] == ult_mes)
         ]["estoque_mensal"].sum()
     )
 
@@ -220,14 +223,14 @@ def display_resumo_cards(df_caged, df_estoque, municipio_interesse):
 
     with col1:
         render_card_saldo(
-            label=f"Saldo no Mês em {MESES_DIC[ult_mes]} de {ult_ano}",
+            label=f"Saldo de Admissões/Demissões no Mês em {MESES_DIC[ult_mes]} de {ult_ano}",
             valor_formatado=saldo_formatado,
             valor=saldo_ult_mes,
         )
 
     with col2:
         render_card_saldo(
-            label=f"Saldo Acumulado de Jan a {MESES_DIC[ult_mes][:3]} de {ult_ano}",
+            label=f"Saldo de Admissões/Demissões Acumulado de Jan a {MESES_DIC[ult_mes][:3]} de {ult_ano}",
             valor_formatado=acumulado_formatado,
             valor=saldo_acu_ano,
         )
@@ -1845,7 +1848,9 @@ def show_page_emprego(
 
     st.markdown("---")
     st.markdown("##### Estoque de Emprego Estimado")
-    st.caption("Estimativa de Estoque de Emprego (Dados combinados da RAIS e CAGED) - Atualização Mensal")
+    st.caption(
+        "Estimativa de Estoque de Emprego (Dados combinados da RAIS e CAGED) - Atualização Mensal"
+    )
 
     display_estoque_municipios_expander(
         df_estoque,
