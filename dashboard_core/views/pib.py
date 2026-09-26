@@ -64,17 +64,14 @@ def preparar_dados_graficos_pib(df_filtrado, coluna_agregacao, coluna_selecionad
 
     df_completo = pd.merge(df_grid, df_filtrado, on=["ano", "municipio"], how="left")
 
-    if coluna_selecionada in df_completo.columns:
-        df_completo[coluna_selecionada] = df_completo[coluna_selecionada].fillna(0)
-    else:
-        df_completo[coluna_selecionada] = 0
+    if coluna_selecionada not in df_completo.columns:
+        return pd.DataFrame()
 
     df_graf = df_completo.pivot_table(
         index="ano",
         columns=coluna_agregacao,
         values=coluna_selecionada,
-        aggfunc="sum",
-        fill_value=0,
+        aggfunc=lambda valores: valores.sum(min_count=1),
     ).sort_index()
 
     df_graf.index = df_graf.index.astype(str)
@@ -211,10 +208,10 @@ def display_pib_vab_expander(
 
         # Soma total de VAB por ano - se for 0, significa que não há dados atualizados
         df_filtrado = df_filtrado.copy()
-        df_filtrado["soma_vab"] = df_filtrado[colunas_vab_existentes].sum(axis=1)
+        df_filtrado["soma_vab"] = df_filtrado[colunas_vab_existentes].sum(axis=1, min_count=1)
 
-        # Manter apenas linhas onde há dados de VAB (soma > 0)
-        df_filtrado = df_filtrado[df_filtrado["soma_vab"] > 0].drop(
+        # Valor zero é diferente de ausência na divulgação oficial.
+        df_filtrado = df_filtrado[df_filtrado["soma_vab"].notna()].drop(
             columns=["soma_vab"]
         )
 

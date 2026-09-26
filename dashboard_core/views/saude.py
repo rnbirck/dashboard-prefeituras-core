@@ -161,11 +161,13 @@ def preparar_dados_graficos_saude_mensal(
         # Para soma, filtra registros com dados válidos
         if metodo_agg == "ratio":
             df_com_dados = df_filtrado.copy()
-            # Preenche NaN com 0 para as colunas de cálculo
-            if col_numerador:
-                df_com_dados[col_numerador] = df_com_dados[col_numerador].fillna(0)
-            if col_denominador:
-                df_com_dados[col_denominador] = df_com_dados[col_denominador].fillna(0)
+            # Ausência de uma parcela não é zero. Agrega somente pares válidos;
+            # numerador zero é uma observação válida e deve continuar visível.
+            if col_numerador and col_denominador:
+                df_com_dados = df_com_dados.loc[
+                    df_com_dados[col_numerador].notna()
+                    & df_com_dados[col_denominador].gt(0)
+                ]
         else:
             df_com_dados = df_filtrado[df_filtrado[coluna_selecionada].notna()].copy()
 
@@ -197,7 +199,7 @@ def preparar_dados_graficos_saude_mensal(
             # Filtra registros onde AMBAS as colunas têm dados válidos (não-zero e não-nulo)
             df_validos = df_com_dados[
                 (df_com_dados[col_numerador].notna())
-                & (df_com_dados[col_numerador] > 0)
+                & (df_com_dados[col_numerador] >= 0)
                 & (df_com_dados[col_denominador].notna())
                 & (df_com_dados[col_denominador] > 0)
             ]
@@ -280,7 +282,7 @@ def preparar_dados_graficos_saude_mensal(
         if is_taxa:
             df_acum_var_full = df_acum_full.diff()
         else:
-            df_acum_var_full = df_acum_full.pct_change() * 100
+            df_acum_var_full = df_acum_full.pct_change(fill_method=None) * 100
 
         # Aplica filtro de anos apenas aos valores absolutos
         if anos_visualizacao:
@@ -333,7 +335,7 @@ def preparar_dados_graficos_saude_mensal(
         if is_taxa:
             df_anual_var_full = df_anual_full.diff()
         else:
-            df_anual_var_full = df_anual_full.pct_change() * 100
+            df_anual_var_full = df_anual_full.pct_change(fill_method=None) * 100
 
         # Aplica filtro de anos apenas aos valores absolutos
         if anos_visualizacao:
@@ -391,7 +393,7 @@ def preparar_dados_obitos_tipo_tabela(df, municipio, anos_interesse=None):
 
     # Calcula Variação Percentual (Ano X vs Ano X-1)
     # pct_change faz (atual - anterior) / anterior
-    pivot_pct = pivot_val.pct_change(axis=1) * 100
+    pivot_pct = pivot_val.pct_change(axis=1, fill_method=None) * 100
 
     # Filtra pelos anos de interesse
     if anos_interesse:
@@ -428,7 +430,7 @@ def preparar_dados_graficos_saude_anual(
     if is_percentual:
         df_anual_var = df_anual_full.diff()
     else:
-        df_anual_var = df_anual_full.pct_change() * 100
+        df_anual_var = df_anual_full.pct_change(fill_method=None) * 100
 
     # Aplica filtro de anos apenas aos valores absolutos
     if anos_visualizacao:
@@ -1547,6 +1549,8 @@ def show_page_saude(
     df_obitos_tipo=None,
     df_saude_sisab=None,
 ):
+    st.caption('As competências mais recentes de saúde são parciais e sujeitas a revisão. '
+               'Cada indicador apresenta o último período disponível em sua fonte.')
     # 1. Inicialização dos estados dos expanders
     if "obitos_expander_state" not in st.session_state:
         st.session_state.obitos_expander_state = False
@@ -1942,7 +1946,8 @@ def show_page_saude(
         callback_func=internacoes_residentes_callback,
     )
 
-    # Disclaimer sobre descontinuação do SISAB
+    st.caption("SISAB / Previne Brasil: série histórica encerrada em abril de 2025. "
+               "Os indicadores do novo cofinanciamento têm metodologia diferente.")
 
     display_sisab_expander(
         df_sisab=df_saude_sisab,
@@ -1972,7 +1977,8 @@ def show_page_saude(
 
     display_saude_anual_expander(
         df_filtrado=df_saude_despesas,
-        titulo_expander="Despesas com Saúde",
+        titulo_expander=(f"Despesas com Saúde — valores a preços de dezembro de {int(df_saude_despesas.ano.max())}"
+                        if not df_saude_despesas.empty else "Despesas com Saúde"),
         dicionario_indicadores=INDICADORES_DESPESAS,
         key_prefix="despesas",
         expander_state_key="despesas_expander_state",

@@ -4,6 +4,7 @@ import requests
 import io
 import os
 from supabase import create_client, Client
+from .paginacao import executar_paginado
 
 # CONFIGURAÇÃO DA CONEXÃO SUPABASE ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -33,7 +34,7 @@ else:
 
 # FUNÇÕES AUXILIARES E CACHE
 
-CACHE_TTL = None  # Infinito
+CACHE_TTL = 3600  # Reconsulta o Supabase após uma hora, na próxima leitura.
 
 
 def construir_url_gdrive_download(file_id):
@@ -63,13 +64,13 @@ def carregar_dados_adm_publica(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_adm_publica")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -78,13 +79,13 @@ def carregar_dados_indicadores_financeiros(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_indicadores_financeiros")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -93,13 +94,13 @@ def carregar_dados_financas(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_financas")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -108,13 +109,13 @@ def carregar_dados_populacao_densidade(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_populacao_densidade")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -123,13 +124,13 @@ def carregar_dados_populacao_sexo_idade(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_populacao_sexo_idade")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -138,13 +139,13 @@ def carregar_dados_emprego_municipios(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_emprego_municipios")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -153,13 +154,13 @@ def carregar_dados_vinculos_municipios(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_vinculos_municipios")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -168,13 +169,13 @@ def carregar_dados_estoque_municipios(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estoque_municipios")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -183,13 +184,13 @@ def carregar_dados_emprego_cnae(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_emprego_cnae")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -198,13 +199,13 @@ def carregar_dados_vinculos_cnae(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_vinculos_cnae")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -213,13 +214,13 @@ def carregar_dados_estoque_cnae_subclasse(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estoque_cnae_subclasse")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -228,13 +229,13 @@ def carregar_dados_estoque_cnae_grupo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estoque_cnae_grupo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -243,13 +244,13 @@ def carregar_dados_estoque_cnae_setor(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estoque_cnae_setor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -258,13 +259,13 @@ def carregar_dados_emprego_grau_instrucao(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_emprego_grau_instrucao")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -273,13 +274,13 @@ def carregar_dados_vinculos_grau_instrucao(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_vinculos_grau_instrucao")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -288,13 +289,13 @@ def carregar_dados_estoque_grau_instrucao(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estoque_grau_instrucao")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -303,13 +304,13 @@ def carregar_dados_emprego_faixa_etaria(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_emprego_faixa_etaria")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -318,13 +319,13 @@ def carregar_dados_vinculos_faixa_etaria(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_vinculos_faixa_etaria")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -333,13 +334,13 @@ def carregar_dados_estoque_faixa_etaria(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estoque_faixa_etaria")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -348,13 +349,13 @@ def carregar_dados_emprego_raca_cor(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_emprego_raca_cor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -363,13 +364,13 @@ def carregar_dados_vinculos_raca_cor(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_vinculos_raca_cor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -378,13 +379,13 @@ def carregar_dados_estoque_raca_cor(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estoque_raca_cor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -393,13 +394,13 @@ def carregar_dados_emprego_sexo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_emprego_sexo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -408,13 +409,13 @@ def carregar_dados_vinculos_sexo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_vinculos_sexo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -423,13 +424,13 @@ def carregar_dados_estoque_sexo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estoque_sexo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -438,13 +439,13 @@ def carregar_dados_estabelecimentos_setor(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estabelecimentos_setor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -453,13 +454,13 @@ def carregar_dados_estabelecimentos_grupo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estabelecimentos_grupo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -468,13 +469,13 @@ def carregar_dados_estabelecimentos_subclasse(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estabelecimentos_subclasse")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -483,13 +484,13 @@ def carregar_dados_estabelecimentos_tamanho(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estabelecimentos_tamanho")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -498,13 +499,13 @@ def carregar_dados_estabelecimentos_municipios(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_estabelecimentos_municipios")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -513,13 +514,13 @@ def carregar_dados_renda_cnae(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_renda_cnae")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -528,13 +529,13 @@ def carregar_dados_renda_faixa_salarial(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_renda_faixa_salarial")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -543,13 +544,13 @@ def carregar_dados_renda_sexo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_renda_sexo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -558,13 +559,13 @@ def carregar_dados_renda_raca_cor(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_renda_raca_cor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -573,13 +574,13 @@ def carregar_dados_renda_municipios(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_renda_municipios")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -589,13 +590,13 @@ def carregar_dados_renda_ranking(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_renda_ranking_municipios")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -604,13 +605,13 @@ def carregar_dados_comex_anual(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_comex_anual")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -619,13 +620,13 @@ def carregar_dados_comex_mensal(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_comex_mensal")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -634,13 +635,13 @@ def carregar_dados_comex_municipio(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_comex_municipio")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -649,13 +650,13 @@ def carregar_dados_seguranca(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_seguranca")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -664,13 +665,13 @@ def carregar_dados_seguranca_taxa(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_seguranca_taxa")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -678,13 +679,13 @@ def carregar_dados_seguranca_furtos(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_seguranca_furtos")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -693,13 +694,13 @@ def carregar_dados_CAD(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_cadastro_unico")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -708,13 +709,13 @@ def carregar_dados_bolsa_familia(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_bolsa_familia")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -723,13 +724,13 @@ def carregar_dados_cnpj_total(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_cnpj_total")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -738,13 +739,13 @@ def carregar_dados_cnpj_cnae(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_cnpj_cnae")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -753,13 +754,13 @@ def carregar_dados_cnpj_setor(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_cnpj_setor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -768,13 +769,13 @@ def carregar_dados_cnpj_cnae_saldo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_cnpj_cnae_saldo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -783,13 +784,13 @@ def carregar_dados_mei_total(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_mei_total")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -798,13 +799,13 @@ def carregar_dados_mei_cnae(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_mei_cnae")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -813,13 +814,13 @@ def carregar_dados_mei_setor(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_mei_setor")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -828,13 +829,13 @@ def carregar_dados_mei_cnae_saldo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_mei_cnae_saldo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -843,13 +844,13 @@ def carregar_dados_educacao_matriculas(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_educacao_matriculas")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -858,13 +859,13 @@ def carregar_dados_educacao_rendimento(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_educacao_rendimento")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -873,12 +874,12 @@ def carregar_dados_educacao_ideb_municipio(municipios):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_educacao_ideb_municipios")
         .select("*")
         .in_("municipio", list(municipios))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -887,12 +888,12 @@ def carregar_dados_educacao_ideb_escolas(municipios):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_educacao_ideb_escolas")
         .select("*")
         .in_("municipio", list(municipios))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -901,13 +902,13 @@ def carregar_dados_educacao_saers(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_educacao_saers")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -916,13 +917,13 @@ def carregar_dados_saude_mensal(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_mensal")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -931,13 +932,13 @@ def carregar_dados_saude_mort_prematura(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_mort_prematura")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -946,13 +947,13 @@ def carregar_dados_saude_despesas(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_despesas")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -961,13 +962,13 @@ def carregar_dados_saude_obitos_tipo(municipio, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_obitos_tipo")
         .select("*")
         .eq("municipio", municipio)
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -976,13 +977,13 @@ def carregar_dados_saude_leitos(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_leitos")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     df = pd.DataFrame(response.data)
     if not df.empty and "qtd_leitos" in df.columns and "qtd_leitos_sus" in df.columns:
         df["percentual_leitos_sus"] = (
@@ -996,13 +997,13 @@ def carregar_dados_saude_medicos(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_medicos")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     df = pd.DataFrame(response.data)
     if not df.empty and "qtd_medicos" in df.columns and "qtd_medicos_sus" in df.columns:
         df["percentual_medicos_sus"] = (
@@ -1016,13 +1017,13 @@ def carregar_dados_saude_vacinas(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_vacinas")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -1031,13 +1032,13 @@ def carregar_dados_saude_internacoes_residentes(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_internacoes_residentes")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -1046,13 +1047,13 @@ def carregar_dados_saude_sisab(municipios, anos):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_saude_sisab")
         .select("*")
         .in_("municipio", list(municipios))
         .in_("ano", list(anos))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
 
 
@@ -1061,10 +1062,10 @@ def carregar_dados_pib_municipios(municipios):
     if not supabase_client:
         st.error("Conexão com Supabase não estabelecida.")
         return pd.DataFrame()
-    response = (
+    consulta = (
         supabase_client.table("dados_pib_municipios")
         .select("*")
         .in_("municipio", list(municipios))
-        .execute()
     )
+    response = executar_paginado(consulta)
     return pd.DataFrame(response.data)
