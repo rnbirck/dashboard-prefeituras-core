@@ -117,8 +117,7 @@ def preparar_dados_graficos_siconfi(df_filtrado, cod_conta, anos_visualizacao):
             index="periodo",
             columns="municipio",
             values="valor_milhoes",
-            aggfunc="sum",
-            fill_value=0,
+            aggfunc=lambda valores: valores.sum(min_count=1),
         )
 
         # Criar DataFrame auxiliar para ordenação
@@ -144,7 +143,6 @@ def preparar_dados_graficos_siconfi(df_filtrado, cod_conta, anos_visualizacao):
             columns="municipio",
             values="variacao_yoy",
             aggfunc="first",
-            fill_value=0,
         )
 
         # Aplicar mesma ordenação
@@ -163,8 +161,7 @@ def preparar_dados_graficos_siconfi(df_filtrado, cod_conta, anos_visualizacao):
             index="ano",
             columns="municipio",
             values="valor_milhoes",
-            aggfunc="sum",
-            fill_value=0,
+            aggfunc=lambda valores: valores.sum(min_count=1),
         ).sort_index()
 
         # Adicionar informação do bimestre no índice
@@ -172,7 +169,7 @@ def preparar_dados_graficos_siconfi(df_filtrado, cod_conta, anos_visualizacao):
         df_bim_full.index = df_bim_full.index.astype(str) + f" ({bimestre_nome})"
 
         # Variação YoY
-        df_bim_var_full = df_bim_full.pct_change() * 100
+        df_bim_var_full = df_bim_full.pct_change(fill_method=None) * 100
 
         # Filtrar anos (agora o índice tem o formato "2023 (Jan-Fev)")
         anos_str = [str(ano) for ano in anos_visualizacao]
@@ -190,8 +187,7 @@ def preparar_dados_graficos_siconfi(df_filtrado, cod_conta, anos_visualizacao):
             index="ano",
             columns="municipio",
             values="valor_milhoes",
-            aggfunc="sum",
-            fill_value=0,
+            aggfunc=lambda valores: valores.sum(min_count=1),
         ).sort_index()
 
         # Adicionar informação do bimestre no índice
@@ -199,7 +195,7 @@ def preparar_dados_graficos_siconfi(df_filtrado, cod_conta, anos_visualizacao):
         df_acum_full.index = df_acum_full.index.astype(str) + f" (até {bimestre_nome})"
 
         # Variação YoY
-        df_acum_var_full = df_acum_full.pct_change() * 100
+        df_acum_var_full = df_acum_full.pct_change(fill_method=None) * 100
 
         # Filtrar anos (agora o índice tem o formato "2023 (até Jan-Fev)")
         anos_str = [str(ano) for ano in anos_visualizacao]
@@ -219,15 +215,14 @@ def preparar_dados_graficos_siconfi(df_filtrado, cod_conta, anos_visualizacao):
             index="ano",
             columns="municipio",
             values="valor_milhoes",
-            aggfunc="sum",
-            fill_value=0,
+            aggfunc=lambda valores: valores.sum(min_count=1),
         ).sort_index()
 
         # Índice apenas com o ano (sem informação do bimestre)
         df_anual_full.index = df_anual_full.index.astype(str)
 
         # Variação YoY
-        df_anual_var_full = df_anual_full.pct_change() * 100
+        df_anual_var_full = df_anual_full.pct_change(fill_method=None) * 100
 
         # Filtrar anos
         anos_str = [str(ano) for ano in anos_visualizacao]
@@ -692,8 +687,7 @@ def preparar_dados_grafico_indicador_financeiros(
         index="ano",
         columns="municipio",
         values=coluna_selecionada,
-        aggfunc="sum",
-        fill_value=0,
+        aggfunc=lambda valores: valores.sum(min_count=1),
     ).sort_index()
 
     return df_graf
